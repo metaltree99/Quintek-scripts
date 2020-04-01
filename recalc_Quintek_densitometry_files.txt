@@ -1,5 +1,5 @@
 #!/bin/bash
-#Sébastien Clément
+#SÃ©bastien ClÃ©ment
 #Created 5/2/2016
 
 version="20191001"
@@ -173,7 +173,7 @@ version="20191001"
 		#		e.g. harvest on 2019-01-02 --> growth year = 2018
 		#		e.g. harvest on 2018-10-01 --> growth year = 2018
 		#	Column #5: was harvested during growing season ? (boolean)
-		#		t if harvested durant growing season (typically May 15th to September 30th around Québec City).
+		#		t if harvested durant growing season (typically May 15th to September 30th around QuÃ©bec City).
 
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -181,7 +181,7 @@ version="20191001"
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #corrected reads file (1 file per sample):
 #---------------------------------------------
-	#Example: A6_corr_reads.txt ("P:\___0TreeSource\___0Requetes_utilisateurs\20160425_(TODO)_PatrickLenz_GAPP_density\Génération_de_sum_corrigés_avec_dat_20170612\RealRun20170614\density_outfiles_201706141607\A6_corr_reads.txt")
+	#Example: A6_corr_reads.txt ("P:\___0TreeSource\___0Requetes_utilisateurs\20160425_(TODO)_PatrickLenz_GAPP_density\GÃ©nÃ©ration_de_sum_corrigÃ©s_avec_dat_20170612\RealRun20170614\density_outfiles_201706141607\A6_corr_reads.txt")
 	#	sample_name	ring_year_sum	ring_no_sum	pos_dat	density_dat	ring_no_dat	transition_dat	line_no	transition	pos_p2b
 	#	A6	2014	8	2.320	971.92	8	L	  1342	2	43.88
 	#	A6	2014	8	2.360	864.14	8	L	  1341	2	43.84
@@ -326,7 +326,7 @@ version="20191001"
 #	20160714
 #		Now also considers commas as decimals in .sum files for recognition of data rows.
 #		Also checks that the positions are ordered, and that no lines of data are duplicated. This happened a lot in files from Martin Girardin's projects.
-#			...see: "P:\___0TreeSource\___0Requetes_utilisateurs\20160707_(TODO)_MartinGirardin_densité_E353\SébastienClément20160714_erreurs_lignes_dupliquées.msg"
+#			...see: "P:\___0TreeSource\___0Requetes_utilisateurs\20160707_(TODO)_MartinGirardin_densitÃ©_E353\SÃ©bastienClÃ©ment20160714_erreurs_lignes_dupliquÃ©es.msg"
 #			When this occurs, warn and exit. In the future, we may simply remove those lines from the files and proceed.
 #	20170613
 #		Infiles folder now passed in a parameter
@@ -462,7 +462,7 @@ version="20191001"
 #		3. Also puts that timestamp at the end of the temporary folder (which was previously at the minute precision) to avoid putting several runs started within the same minute under the same folder
 #			temp_f=density_outfiles_${ts}
 #		4. E9a.	Rings from .dat file are missing in .sum file. ---> now W10
-#			...car il est possible que ce cerne ait délibérément été omis du fichier .sum car il n'était pas bon.
+#			...car il est possible que ce cerne ait dÃ©libÃ©rÃ©ment Ã©tÃ© omis du fichier .sum car il n'Ã©tait pas bon.
 #		5. 
 #			${temp_f}/logs_and_summaries/all_analyses_start_timestamp.txt	---> /dev/shm/${ts}_all_analyses_start_timestamp.txt
 #			${temp_f}/logs_and_summaries/all_analyses_end_timestamp.txt	---> /dev/shm/${ts}_all_analyses_end_timestamp.txt
@@ -616,7 +616,7 @@ version="20191001"
 #	20190619
 #		After looking at 45 rings (pictures of cores, average density of extreme density reads, and % of extreme reads) flagged as invalid according to the min_allowed_density (actually at 200)  and extreme_densities_max_pct_allowed variables (actually at 20)
 #		...it was decided that the new values should be: min_allowed_density=100 and extreme_densities_max_pct_allowed=50. This will better allow to raise a flag only when they are large parts of missing wood in the rings, giving an unusually low density (air).
-#		For reference, see: "P:\___0TreeSource\___0Requetes_utilisateurs\20190111_(TODO)_Claire_nouvelles_mesures_Mastigouche_pour_projet_isotopes\int\invalid_rings_simpler_stats_annotées.txt"
+#		For reference, see: "P:\___0TreeSource\___0Requetes_utilisateurs\20190111_(TODO)_Claire_nouvelles_mesures_Mastigouche_pour_projet_isotopes\int\invalid_rings_simpler_stats_annotÃ©es.txt"
 #
 #	20190621
 #		Now includes the "Commentaires" parameter from .dat files to be extracted
@@ -676,7 +676,7 @@ version="20191001"
 #		- Script now copies itself to ${temp_f}
 #
 #	20190909
-#		Ligne 1293, on a ajouté l'option -H au grep, pour s'assurer qu'il affiche le chemin du fichier, même lorsqu'il n'y en a qu'un seul (défaut: n'affiche le chemin que lorsqu'il y a >1 fichier), sinon cela cause une erreur.
+#		Ligne 1293, on a ajoutÃ© l'option -H au grep, pour s'assurer qu'il affiche le chemin du fichier, mÃªme lorsqu'il n'y en a qu'un seul (dÃ©faut: n'affiche le chemin que lorsqu'il y a >1 fichier), sinon cela cause une erreur.
 #
 #	20190910
 #		Now auto-detects the type of data (position, density, ring no or wood type) for .dat files! See line ~ 1606
@@ -786,7 +786,7 @@ extreme_densities_max_pct_allowed=50
 	#Explanations:
 	#	Even if only reads delimitated from the .sum file (ring end position and ring start position) are taken, 
 	#	...some reads with -1,N (ring number and transition) often still remain in the range in the first (bark side) and last (pith side) rings.
-	#	These -1,N reads occur when density is <= 100 kg/m3 (verified for 1912 .dat files in E952 project, see: "P:\___0TreeSource\___0Requetes_utilisateurs\20170925_(TODO)_vérifier_distribution_densité_dans_x_ray_dens_msmts_per_read\protocole.txt").
+	#	These -1,N reads occur when density is <= 100 kg/m3 (verified for 1912 .dat files in E952 project, see: "P:\___0TreeSource\___0Requetes_utilisateurs\20170925_(TODO)_vÃ©rifier_distribution_densitÃ©_dans_x_ray_dens_msmts_per_read\protocole.txt").
 	#	... and should not be in the final files.
 	#	Hence, they are removed here.
 	#	This serves to remove reads with normal density that sometimes appear before (bark-side) or after (pith side) low-density reads...
@@ -832,14 +832,14 @@ extreme_densities_max_pct_allowed=50
 #Updated: 3/6/2019
 declare -A operators_abbrev_fullname
 operators_abbrev_fullname=(
-[jeffl]="Jean-François Légaré" 
-[jfl]="Jean-François Légaré" 
-[eduss]="Éric Dussault"
+[jeffl]="Jean-FranÃ§ois LÃ©garÃ©" 
+[jfl]="Jean-FranÃ§ois LÃ©garÃ©" 
+[eduss]="Ã‰ric Dussault"
 [foster-francis]="Foster Hart, Francis de Araujo"
 [foster]="Foster Hart"
 [vseigner]="Vincent Seigner"
-[jfleagre]="Jean-François Légaré"
-[jflegare]="Jean-François Légaré"
+[jfleagre]="Jean-FranÃ§ois LÃ©garÃ©"
+[jflegare]="Jean-FranÃ§ois LÃ©garÃ©"
 )
 
 
@@ -1139,7 +1139,7 @@ printf "name\t.dat file\tcomments\n------\t---------\t----------------\n" > ${te
 #Script launch line
 #------------------------------------------------------------------------------------------------------------
 printf "${blue_color}Script to calculate early- to late-wood transitions from densitometry (.dat and .sum) files.\n"
-printf "Created Feb. 8, 2016, S. Clément.\n"
+printf "Created Feb. 8, 2016, S. ClÃ©ment.\n"
 printf "Current version: $0 (${version})${normal_color}\n\n"
 
 #List .dat/.sum files in specified directory.
@@ -1422,14 +1422,14 @@ head -1 ${temp_f}/logs_and_summaries/intermediate/dat_parameters.txt|perl -pe 's
 #Dates (NEW: 28/11/2018)
 sort -u /dev/shm/${ts}_parameters_all_dates.txt > ${temp_f}/logs_and_summaries/intermediate/distinct_scan_dates.txt
 
-#Opérateurs, tous à la chaîne
+#OpÃ©rateurs, tous Ã  la chaÃ®ne
 operators=$(perl -pe 's/\n/, /g' /dev/shm/${ts}_distinct_operators.txt|perl -pe 's/, $/\n/g')
 
 
 
 
 
-#Échantillons avec commentaires, statut de moëlle , et nombre de cernes enlevés côté moëlle
+#Ã‰chantillons avec commentaires, statut de moÃ«lle , et nombre de cernes enlevÃ©s cÃ´tÃ© moÃ«lle
 
 #Get the field positions (NEW: 28/11/2018)
 #Note: filename is always #1
@@ -1456,17 +1456,17 @@ head -1 /dev/shm/${ts}_dat_params_temp.txt > /dev/shm/${ts}_dat_params_temp_head
 #Add germplasm_id and data_source_id columns from equivalency list ($eq_list)
 join -t $'\t' <(sort -k1,1 /dev/shm/${ts}_dat_params_temp.txt) <(sort -k1,1 $eq_list)|cat <(paste /dev/shm/${ts}_dat_params_temp_header.txt <(printf "germplasm_id\tdata_source_id\tgrowth_year\tharvested_in_growing_season\n")) - > ${temp_f}/logs_and_summaries/intermediate/samples_info_from_dat_parameters.txt
 #	file	Date	Op_fullname	Is pith present	No. pith rings missing	Description	Commentaires	germplasm_id	data_source_id	growth_year	harvested_in_growing_season
-#	14	2019-01-31	Jean-François Légaré	Yes	0	E560A3 1 169 2 14	Carotte cassee donnees manquantes entre 1994 et 2005	544346	523	2018	t
-#	2	2019-02-18	Jean-François Légaré	Yes	0	E560A3 1 32 4 2		544307	523	2018	t
-#	57	2019-02-05	Jean-François Légaré	Yes	0	E560A3 2 170 4 57	Carotte cassee au mileu entre 2004 et 1996 / le cerne numero 12 a ete supprime car incomplet	544393	523	2018	t
+#	14	2019-01-31	Jean-FranÃ§ois LÃ©garÃ©	Yes	0	E560A3 1 169 2 14	Carotte cassee donnees manquantes entre 1994 et 2005	544346	523	2018	t
+#	2	2019-02-18	Jean-FranÃ§ois LÃ©garÃ©	Yes	0	E560A3 1 32 4 2		544307	523	2018	t
+#	57	2019-02-05	Jean-FranÃ§ois LÃ©garÃ©	Yes	0	E560A3 2 170 4 57	Carotte cassee au mileu entre 2004 et 1996 / le cerne numero 12 a ete supprime car incomplet	544393	523	2018	t
 
-#Taux d'humidité - en théorie un seul, parfois plusieurs!
-	#a) dans un fichier, arrondi à l'unité  [2019-07-12]
+#Taux d'humiditÃ© - en thÃ©orie un seul, parfois plusieurs!
+	#a) dans un fichier, arrondi Ã  l'unitÃ©  [2019-07-12]
 	tail -n+2 ${temp_f}/logs_and_summaries/intermediate/dat_parameters.txt|cut -f${mc_col} -d $'\t'|sort -un|awk '{printf "%.*f\n", 0, $1}' > ${temp_f}/logs_and_summaries/intermediate/distinct_mc.txt
 	#8
 	#12
 
-	#b) dans une variable, séparés par des virgules [2019-07-12]
+	#b) dans une variable, sÃ©parÃ©s par des virgules [2019-07-12]
 	#sample_moisture_contents=$(tail -n+2 ${temp_f}/logs_and_summaries/intermediate/dat_parameters.txt|cut -f${mc_col} -d $'\t'|sort -u|perl -pe 's/\n/, /g'|perl -pe 's/, $/\n/g')
 	sample_moisture_contents=$(perl -pe 's/\n/, /g' ${temp_f}/logs_and_summaries/intermediate/distinct_mc.txt|perl -pe 's/, $/\n/g')
 	#8, 12
@@ -1863,7 +1863,7 @@ do
 		
 		then
 			#Inscrit dans ${ts}_current_sample_ring_errors_and_warnings.txt le "gap", de la lecture actuelle vers la prochaine, et vice-versa.
-			#Génère donc 2 messages d'erreur à la fois.
+			#GÃ©nÃ¨re donc 2 messages d'erreur Ã  la fois.
 			awk -F "\t" -v sn=${sample_name} '{if ($6 >= 10) print sn"\t"$2"\tE5\tLarge gap ("$5" mm) from position "$1" to next position "$3"."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
 			awk -F "\t" -v sn=${sample_name} '{if ($6 >= 10) print sn"\t"$4"\tE5\tLarge gap ("$5" mm) from position "$3" to previous position "$1"."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
 			
@@ -2636,7 +2636,7 @@ do
 				printf "\t\tNormal \t${normal_dens_avg}\t${curr_ring_clean_reads}\t${normal_dens_pct}\n"
 				printf "\t\tTOTAL  \t${all_dens_avg}\t${number_of_reads}\t$(printf "%4g\n" $(echo "scale=3; $number_of_reads/$number_of_reads*100" | bc))\n"
 			
-				#Si le % de lectures de densité extrème dépasse celui permis (affichera 1 ligne et l'expression sera vraie), mettre le cerne dans la liste d'invalides
+				#Si le % de lectures de densitÃ© extrÃ¨me dÃ©passe celui permis (affichera 1 ligne et l'expression sera vraie), mettre le cerne dans la liste d'invalides
 				if [ $(printf "$extreme_dens_pct\t$extreme_densities_max_pct_allowed\n"|awk -F "\t" '{if($1 > $2) print}'|wc -l) -gt 0 ]
 				then
 					
@@ -3289,9 +3289,9 @@ then
 	#[27/11/2018] Join with samples_info_from_dat_parameters.txt from .dat files to create sample_stats_and_comments.txt
 	join -t $'\t' <(sort -k1,1 ${temp_f}/logs_and_summaries/intermediate/all_samples_ring_nos_and_years.txt) <(sort -k1,1 ${temp_f}/logs_and_summaries/intermediate/samples_info_from_dat_parameters.txt) > ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt
 	#sample_stats_and_comments.txt
-	#	14	2	34	1986	2018	2019-01-31		Jean-François Légaré	Yes	0	E560A3 1 169 2 14	Carotte cassee donnees manquantes entre 1994 et 2005							544346	523	2018	t
-	#	2	2	32	1988	2018	2019-02-18	Jean-François Légaré	Yes	0	E560A3 1 32 4 2																		544307	523	2018	t
-	#	57	2	33	1986	2017	2019-02-05	Jean-François Légaré	Yes	0	E560A3 2 170 4 57	Carotte cassee au mileu entre 2004 et 1996 / le cerne numero 12 a ete supprime car incomplet	544393	523	2018	t
+	#	14	2	34	1986	2018	2019-01-31		Jean-FranÃ§ois LÃ©garÃ©	Yes	0	E560A3 1 169 2 14	Carotte cassee donnees manquantes entre 1994 et 2005							544346	523	2018	t
+	#	2	2	32	1988	2018	2019-02-18	Jean-FranÃ§ois LÃ©garÃ©	Yes	0	E560A3 1 32 4 2																		544307	523	2018	t
+	#	57	2	33	1986	2017	2019-02-05	Jean-FranÃ§ois LÃ©garÃ©	Yes	0	E560A3 2 170 4 57	Carotte cassee au mileu entre 2004 et 1996 / le cerne numero 12 a ete supprime car incomplet	544393	523	2018	t
 	
 	
 	#[2019-05-29]: add description of fields for sample_stats_and_comments.txt: sample_stats_and_comments_fields.txt
@@ -3334,7 +3334,7 @@ then
 	#523     544324  2017    Automatically added on 2019-07-15 by -bash because last ring year in .sum file (2017) is lower than expected year from harvest date (2018).     \N    2019-07-15
 	#523     544418  2017    Automatically added on 2019-07-15 by -bash because last ring year in .sum file (2017) is lower than expected year from harvest date (2018).     \N    2019-07-15
 
-	#If there were last rings in ­.sum data which year was lower than expected
+	#If there were last rings in Â­.sum data which year was lower than expected
 	if [ -s ${temp_f}/for_import/last_ring_year_in_densitometry_data.txt ]
 	then
 		echo
@@ -3478,7 +3478,7 @@ printf "Reporting on warnings/errors..."
 #	(...52 062)
 
 
-#Voir les échantillons par erreur
+#Voir les Ã©chantillons par erreur
 grep -v '^$' ${temp_f}/logs_and_summaries/intermediate/rings_errors_and_warnings.txt|cut -f1,3 |sort -u|cut -f2|sort|uniq -c|perl -pe 's/^ +(\d+) (\S+)/\2\t\1/g' > /dev/shm/${ts}_samples_count_per_w_e.txt
 
 #	/dev/shm/${ts}_samples_count_per_w_e.txt                                                                                                  
@@ -3511,14 +3511,14 @@ grep -v '^$' ${temp_f}/logs_and_summaries/intermediate/rings_errors_and_warnings
 #	W8r     5261
 #	W9      41018
 
-#	NOTE: Dès que le script détecte une erreur (E) pour un échantillon, il passe à l'échantillon suivant sans faire les calculs par cerne.
-#		Cependant, il est possible qu'il décompose l'erreur par cerne dans le fichier all_samples_ring_errors_and_warnings.txt,
-#		...c'est pourquoi le nombre de cernes est parfois > que le nombre d'échantillons pour ces erreurs.
+#	NOTE: DÃ¨s que le script dÃ©tecte une erreur (E) pour un Ã©chantillon, il passe Ã  l'Ã©chantillon suivant sans faire les calculs par cerne.
+#		Cependant, il est possible qu'il dÃ©compose l'erreur par cerne dans le fichier all_samples_ring_errors_and_warnings.txt,
+#		...c'est pourquoi le nombre de cernes est parfois > que le nombre d'Ã©chantillons pour ces erreurs.
 #		
-#		Pour les avertissements (W), le script liste habituellement tous les cernes impliqués, d'où le nombre de cernes > nombre d'échantillons.
+#		Pour les avertissements (W), le script liste habituellement tous les cernes impliquÃ©s, d'oÃ¹ le nombre de cernes > nombre d'Ã©chantillons.
 
 
-#Joindre les comptes d'erreurs par échantillon et ceux par cerne
+#Joindre les comptes d'erreurs par Ã©chantillon et ceux par cerne
 join -t $'\t' <(sort -k1,1 /dev/shm/${ts}_samples_count_per_w_e.txt) <(sort -k1,1 /dev/shm/${ts}_rings_count_per_w_e.txt)|join -t $'\t' - <(grep -E '^(E|W)[0-9]' ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt|sort -k1,1) > ${temp_f}/logs_and_summaries/sample_and_ring_w_e_stats.txt
 #	W10	3	3	Rings from .dat file are missing in .sum file.
 #	W16	2	18	There are some extreme density (< 100 OR > 2000 kg/m3) reads in the .DAT file. These reads will be removed before calculating stats (min/mx/avg/median), but will be kept in the final file.
@@ -3596,7 +3596,7 @@ cat <(awk -F "\t" '{print $1"_"$2"_A\t"$0"\t8\tTRUE\t\\N"}' /dev/shm/${ts}_pith_
 if [ -s /dev/shm/${ts}_combined_invalid_rings.txt ]
 then
 	
-	#Obtenir les germplasms_id's, les data_source_id's, à partir de la table d'équivalence.
+	#Obtenir les germplasms_id's, les data_source_id's, Ã  partir de la table d'Ã©quivalence.
 	join -t $'\t' <(sort -k1,1 -t $'\t' ${eq_list}|cut -f1-3 -d $'\t') <(sort -k1,1 -t $'\t' /dev/shm/${ts}_combined_invalid_rings.txt)|awk -v pgfdate=${pgf_date} -F "\t" '{print $2"\t"$4"\t"$3"\t"$5"\t"$6"\t"$7"\t"$8"\t"pgfdate}'|sort -k1,1 -k2,2n -t $'\t' > ${temp_f}/for_import/invalid_rings.txt
 	
 	#${temp_f}/for_import/invalid_rings.txt
@@ -3652,7 +3652,7 @@ comment_lines_count=$(cut -f11 -d $'\t' ${temp_f}/logs_and_summaries/sample_stat
 if [ ${comment_lines_count} -gt 0 ]
 then
 	#Create the file. Now converts in UTF-8 format [2019-07-17]
-	awk -F "\t" '{if ($11 != "") print $12"\t"$6"\tFALSE\t"$11"\tDensitométrie\t"$13"\tFALSE\t"$7}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt|iconv -f iso-8859-1 -t utf-8 > ${temp_f}/for_import/comments_on_germplasms_utf.txt
+	awk -F "\t" '{if ($11 != "") print $12"\t"$6"\tFALSE\t"$11"\tDensitomÃ©trie\t"$13"\tFALSE\t"$7}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt|iconv -f iso-8859-1 -t utf-8 > ${temp_f}/for_import/comments_on_germplasms_utf.txt
 	echo
 	printf "${green_color}\tComments on samples from .dat file:\n"
 	printf "\t\tcomments_on_germplasms_utf.txt\n\t\tNOTE: import in a temporary table as team members are listed in full, and have to be converted to team_id using fnct_get_team_id_from_employee_names()\n"
@@ -3669,7 +3669,7 @@ then
 fi
 
 #Ways to improve this:
-#team_id=$(psql -U cleseb -h 132.156.208.30 -d ts_d -A -t -c "SELECT fnct_get_team_id_from_employee_names('Jean-François Légaré')")
+#team_id=$(psql -U cleseb -h 132.156.208.30 -d ts_d -A -t -c "SELECT fnct_get_team_id_from_employee_names('Jean-FranÃ§ois LÃ©garÃ©')")
 #	But: must define the PostgreSQL environment variables: PGHOST, PGDATABASE, PGUSER, etc.
 #
 #
