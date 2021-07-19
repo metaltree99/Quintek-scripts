@@ -687,7 +687,7 @@ version="20210719"
 #			Detects cases where reads are systematically spaced differently than expected from the step parameter (0.04)
 #
 #	20210719
-#		Script auto-determination of column types (lines ) was buggy when .dat files had extra columns such as an incremented line number column like below:
+#		Script auto-determination of data types (lines 1637+) in .dat files was buggy when files had extra columns such as an incremented line number column like below:
 #			[SAMPLE DATA]
 #			    0,   0.780, 811.42, 30,L, 5.1645
 #			    1,   0.790, 803.79, 30,L, 5.1886
