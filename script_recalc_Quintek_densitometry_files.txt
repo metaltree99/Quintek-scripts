@@ -1805,8 +1805,8 @@ do
 
 			#Density. Possible formats: 0.00, 00.00, 000.00, 0000.00
 			#If at least 2 of the above formats are found, consider the current column as being the density
-			#2023-02-17: NO! Sometimes, only the 000.00 format is found! That's why we added the condition that the median value integer be above 100
-			if [ $(grep -E '^0{1,4}\.0{2}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt|wc -l) -gt 0 ] && [ $median_value_int -gt 100 ]
+			#2023-02-17: NO! Sometimes, only the 000.00 format is found! That's why we added the condition that the median value integer be above 200.
+			if [ $(grep -E '^0{1,4}\.0{2}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt|wc -l) -gt 0 ] && [ $median_value_int -gt 200 ]
 			then 
 				#echo "dens"
 				col_dens=${column}
