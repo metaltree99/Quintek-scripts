@@ -2,7 +2,7 @@
 #Sébastien Clément
 #Created 5/2/2016
 
-version="20220407"
+version="20230221"
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #General description
@@ -713,6 +713,14 @@ version="20220407"
 #		- The other 2 (ring number and wood type). which were kept in the *_reads_tmp.txt file, were not used anyway in later calculations but were rather kept for information purposes.
 #		- When any one of the other 2 columns is absent, it is filled with "\N" in the *_reads_tmp.txt file (line ~ 1844).
 #		- Inconsistencies in column numbers between all .dat files now only triggers a warning instead of an abortion of the script, to allow for datasets with .dat files having different column counts.
+#
+#	20230217
+#		- Added Christine Simard as operator
+#
+#	20230221
+#		Changed description for E14 to more accurately represent the problem:  The .sum file contains incomplete rows --> The .sum file has an irregular number of columns
+#		Now adds calculation of median valuefrom function fnct_get_median_value when auto determining the columns type (variable $dat_column_pos_determination_method), around line 1724.
+#			This ensures better identification of the density column.
 
 
 #================================================================================================================================================
@@ -745,7 +753,7 @@ low_density_reads_removal_choice=2
 #Constants for calculations
 #-------------------------------------------------
 #Distance between each read, in mm
-step=0.04
+step=0.02
 
 #Minimum number of reads per ring allowed in the .dat file
 min_reads_per_ring_dat=5
@@ -870,6 +878,8 @@ operators_abbrev_fullname=(
 [jflegare]="Jean-François Légaré"
 [erm]="Edouard Reed-Métayer"
 [ini]="Ioan Nicolae"
+[csimard]="Christine Simard"
+
 )
 
 
@@ -1724,17 +1734,66 @@ do
 		#Go through each column to check the type of data
 		for column in $(seq 1 ${part_cleaned_cols})
 		do 
+			#For test
+			#echo "--------------------"
 			#echo $column
+			#echo "--------------------"
+			
+			#[NEW 2023-02-21]: extract current column
+			#Note: before 2023-02-21, extracting the column and keeping only the distinct zeroed format was done in a single step below.
+			cut -f${column} /dev/shm/${ts}_partly_cleaned_dat.txt > /dev/shm/${ts}_partly_cleaned_dat_curr_col.txt
+			
+			#[NEW 2023-02-21] Get median value from pre-existing function
+			fnct_get_median_value /dev/shm/${ts}_partly_cleaned_dat_curr_col.txt
+			#Get the integer for that median value, for the if below (only accepts integers)
+			median_value_int=$(echo ${median_value%.*})
 			
 			#Extract all possible formats after replacing all digits with 0's
-			cut -f${column} /dev/shm/${ts}_partly_cleaned_dat.txt|perl -pe 's/\d/0/g'|sort -u > /dev/shm/${ts}_partly_cleaned_dat_curr_col.txt
-			#perl -pe 's/^/\t/g' /dev/shm/${ts}_partly_cleaned_dat_curr_col.txt
+			#Line before 2023-02-21: cut -f${column} /dev/shm/${ts}_partly_cleaned_dat.txt|perl -pe 's/\d/0/g'|sort -u > /dev/shm/${ts}_partly_cleaned_dat_curr_col.txt
+			perl -pe 's/\d/0/g' /dev/shm/${ts}_partly_cleaned_dat_curr_col.txt|sort -u > /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt
+			
+			
+			
+			#For test
+			#echo "Formats in column ${column}:"
+			#perl -pe 's/^/\t/g' /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt
+			#echo "Median value from function: $median_value"
+			#echo "median value int from function: $median_value_int"
+		
+			#Ex:
+			#Read number (often column #1): 
+			#	0
+			#	00
+			#	000
+			#	0000
+			
+			#Read position (mm): 
+			#	0.000
+			#	00.000
+			
+			#Density:
+			#	0.00
+			#	00.00
+			#	000.00
+			#	0000.00
+			
+			#Ring number:
+			#	0
+			#	00
+			
+			#Wood type:
+			#	E
+			#	L
+			
+			#
+			
+			
 			
 			#Check the type of data for current column
 			
 			#Position. Possible formats: 0.000, 00.000
 			#If the two formats are present, consider the current column as being the position
-			if [ $(grep -E '^0{1,2}\.0{3}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col.txt|wc -l) -eq 2 ]
+			if [ $(grep -E '^0{1,2}\.0{3}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt|wc -l) -eq 2 ]
 			then 
 				#echo "pos"
 				col_pos_b2p=${column}
@@ -1746,7 +1805,8 @@ do
 
 			#Density. Possible formats: 0.00, 00.00, 000.00, 0000.00
 			#If at least 2 of the above formats are found, consider the current column as being the density
-			if [ $(grep -E '^0{1,4}\.0{2}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col.txt|wc -l) -gt 1 ]
+			#2023-02-17: NO! Sometimes, only the 000.00 format is found! That's why we added the condition that the median value integer be above 100
+			if [ $(grep -E '^0{1,4}\.0{2}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt|wc -l) -gt 0 ] && [ $median_value_int -gt 100 ]
 			then 
 				#echo "dens"
 				col_dens=${column}
@@ -1758,7 +1818,7 @@ do
 
 			#Ring no. Possible formats: 0, -0, 00
 			#If at least 1 of the above formats is found, consider the current column as being the ring number
-			if [ $(grep -E '^-?0{1,2}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col.txt|wc -l) -gt 0 ]
+			if [ $(grep -E '^-?0{1,2}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt|wc -l) -gt 0 ]
 			then 
 				#echo "ringno"
 				col_ringno_p2b=${column}
@@ -1770,7 +1830,7 @@ do
 			
 			#Wood type. Possible formats: E, L, N
 			#If at least 1 of the above formats is found, consider the current column as being the wood type
-			if [ $(grep -E '^[ELN]$' /dev/shm/${ts}_partly_cleaned_dat_curr_col.txt|wc -l) -gt 0 ]
+			if [ $(grep -E '^[ELN]$' /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt|wc -l) -gt 0 ]
 			then 
 				#echo "wood type"
 				col_wood=${column}
@@ -1781,9 +1841,14 @@ do
 		done
 	
 	fi
-
+	
+	
+	
 	#[NEW 2022-04-06]: si certaines colonnes sont absentes, envoyer un avertissement et passer à l'échantillon suivant (position, densité) ou continuer (numéro de cerne, type de bois)
+	
 	#col_pos_b2p and col_dens SHOULD ALWAYS be present, otherwise abort the sample, go to the next.
+	
+	#For test
 	#echo col_pos_b2p ${col_pos_b2p}
 	#echo col_dens ${col_dens}
 	#echo col_ringno_p2b ${col_ringno_p2b}
@@ -1811,6 +1876,8 @@ do
 	#Densité (ESSENTIELLE) - if missing, warn and skip sample
 	if [ ${col_dens} -eq 999 ]
 	then
+		
+		exit #*****************************
 		printf "${red_color}\tE16. The .dat file is missing the DENSITY column, which is REQUIRED!\n\tSAMPLE SKIPPED!${normal_color}\n\n"
 			
 		ring_error_message="The .dat file is missing the DENSITY column."
@@ -1845,7 +1912,7 @@ do
 	
 	#[NEW 2022-04-06]: Fix the errors caused by missing columns among the 4 above
 	#Explanations: 
-	#	Previously, when there were missing columns in the *_partly_cleaned_dat_curr_col.txt file, there was an empty value in:
+	#	Previously, when there were missing columns in the *_partly_cleaned_dat_curr_col_zeroed_formats.txt (Note: 2023-02-21: then: *_partly_cleaned_dat_curr_col.txt) file, there was an empty value in:
 	#	col_pos_b2p, col_dens, col_ringno_p2b or col_wood.
 	#	Example: 
 	#		col_pos_b2p=1
@@ -2135,9 +2202,9 @@ do
 	if [ $(awk -F "\t" '{print NF}' /dev/shm/${ts}_rings_tmp_part.txt|sort -u|wc -l) -gt 1 ]
 	then
 	
-		printf "\t${red_color}E14. The .sum file contains incomplete rows!\n\tSAMPLE SKIPPED!${normal_color}\n\n"
+		printf "\t${red_color}E14. The .sum file has an irregular number of columns!\n\tSAMPLE SKIPPED!${normal_color}\n\n"
 						
-		ring_error_message="The .sum file contains incomplete rows."
+		ring_error_message="The .sum file has an irregular number of columns."
 		ring_error_code="E14"
 		printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
 		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
@@ -3637,7 +3704,7 @@ printf "E10\t.sum file has ring start position lower than ring end position.\n" 
 printf "E11\tThe .dat file reads are spaced differently from expected the step (${step}).\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "E12\tNo reads found in .dat file between end and start positions of .sum file.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "E13\tSome ring numbers are replicated in the .sum file.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
-printf "E14\tThe .sum file contains incomplete rows.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
+printf "E14\tThe .sum file has an irregular number of columns.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "E15\tThe .dat file is missing the POSITION column.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "E16\tThe .dat file is missing the DENSITY column.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 
