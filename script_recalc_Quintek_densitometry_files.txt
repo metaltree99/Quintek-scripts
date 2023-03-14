@@ -2,7 +2,7 @@
 #Sébastien Clément
 #Created 5/2/2016
 
-version="20230221"
+version="20230313"
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #General description
@@ -721,6 +721,17 @@ version="20230221"
 #		Changed description for E14 to more accurately represent the problem:  The .sum file contains incomplete rows --> The .sum file has an irregular number of columns
 #		Now adds calculation of median valuefrom function fnct_get_median_value when auto determining the columns type (variable $dat_column_pos_determination_method), around line 1724.
 #			This ensures better identification of the density column.
+#
+#	20230309
+#		Now flags differently the .sum rings that have no corresponding .dat reads
+#			New: if both ring start and ring end positions = 0 ---> W23: assumes that it's operator filled following dendrochronology analyses showing that rings actually existed for those years, but that they cannot be seem in desitometry.
+#				---> in that case, rings are added to invalid_rings.txt
+#			Otherwise: classique E12 error ---> no reads found between start/end positions.
+#			
+#	20230313
+#		E4 (.dat files missing some rings) turned into W24, because rng numbers from .dat files are NOT used.
+#		Now removes any trailing spaces/tabs when cleaning the .sum file (line  ~2203) to avoid adding a column inadvertently at the end.
+#		When checking for zero-width rings in .sum file, doesn't look anymore for 0 at both start and end position, but rather if the two are equal, which will also work for zero-width rings of non-zero positions (e.g. start=1.36, end=1.36)
 
 
 #================================================================================================================================================
@@ -1641,6 +1652,9 @@ printf "" > ${temp_f}/logs_and_summaries/intermediate/all_reads_rejected_for_low
 #[2019-06-18]  Create the file to store invalid rings due to extreme densities for all samples
 printf "" > /dev/shm/${ts}_invalid_rings_due_to_extreme_densities.txt
 
+#[2023-03-09]  Create the file to store other invalid rings
+printf "" > /dev/shm/${ts}_other_invalid_rings.txt
+
 
 #[2019-06-25]  Create the SQL UPDATE file for invalid samples
 printf "" > ${temp_f}/for_import/SQL_UPDATE_invalid_samples.txt
@@ -1658,8 +1672,9 @@ printf "" > ${temp_f}/logs_and_summaries/intermediate/samples_with_incomplete_la
 printf "" > /dev/shm/${ts}_pith_rings.txt
 
 
+#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #Cycle through all .dat files (all samples)
-#------------------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 for datfile in $(cat /dev/shm/${ts}_dat_files.txt)
 do
 	sample_number+=1
@@ -1965,64 +1980,64 @@ do
 
 	#Check E1 (.dat): is file empty/without proper header ? [2017-07-03]
 	#--------------------------------------------------------------------
-		#If the cleaned .dat file is empty, warn and skip the sample.
-		if [ ! -s /dev/shm/${ts}_reads_tmp.txt ]
-		then 
-			printf "${red_color}\tE1. The .dat file is either empty, or does not contain the required header on the line just before data: $(echo $dat_file_data_tag|perl -pe 's/(\\|\^)//g')\n\tSAMPLE SKIPPED!${normal_color}\n\n"
-			
-			ring_error_message="The .dat file is empty or without proper header ($(echo $dat_file_data_tag|perl -pe 's/(\\|\^)//g'))."
-			ring_error_code="E1"
-			printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
+	#If the cleaned .dat file is empty, warn and skip the sample.
+	if [ ! -s /dev/shm/${ts}_reads_tmp.txt ]
+	then 
+		printf "${red_color}\tE1. The .dat file is either empty, or does not contain the required header on the line just before data: $(echo $dat_file_data_tag|perl -pe 's/(\\|\^)//g')\n\tSAMPLE SKIPPED!${normal_color}\n\n"
+		
+		ring_error_message="The .dat file is empty or without proper header ($(echo $dat_file_data_tag|perl -pe 's/(\\|\^)//g'))."
+		ring_error_code="E1"
+		printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		
+		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+		#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+		fnct_write_warning_and_errors_to_stats_files
 
-			
-			continue
-		fi
+		
+		continue
+	fi
 
 
 	#Check E2 (.dat): are positions duplicated ? [2017-07-03]
 	#--------------------------------------------------------------------
-		cut -f1 /dev/shm/${ts}_reads_tmp.txt|sort|uniq -dc > /dev/shm/${ts}_reads_tmp_replicated_pos.txt
-		replicated_pos=$(cat /dev/shm/${ts}_reads_tmp_replicated_pos.txt|wc -l)
-		
-		if [ ${replicated_pos} -gt 0 ]
-		then
-			#printf "Sample ${file_prefix}:\n"
-			
-			printf "\t${red_color}E2. The .dat file has ${replicated_pos} replicated positions!\n\tSAMPLE SKIPPED.${normal_color}\n\n"
-						
-			ring_error_message="The .dat file has ${replicated_pos} replicated positions!"
-			ring_error_code="E2"
-			printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
-			continue
-		fi
+	cut -f1 /dev/shm/${ts}_reads_tmp.txt|sort|uniq -dc > /dev/shm/${ts}_reads_tmp_replicated_pos.txt
+	replicated_pos=$(cat /dev/shm/${ts}_reads_tmp_replicated_pos.txt|wc -l)
 	
+	if [ ${replicated_pos} -gt 0 ]
+	then
+		#printf "Sample ${file_prefix}:\n"
+		
+		printf "\t${red_color}E2. The .dat file has ${replicated_pos} replicated positions!\n\tSAMPLE SKIPPED.${normal_color}\n\n"
+					
+		ring_error_message="The .dat file has ${replicated_pos} replicated positions!"
+		ring_error_code="E2"
+		printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		
+		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+		#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+		fnct_write_warning_and_errors_to_stats_files
+		continue
+	fi
+
 
 	#Check E3 (.dat): are positions ordered ? [2017-07-03]
 	#--------------------------------------------------------------------
-		#NOTE: we must redirect STDERR to STDOUT in order to capture it in the string
-		disordered_pos=$(cut -f1 /dev/shm/${ts}_reads_tmp.txt|sort -k1,1 -nc 2>&1)
-		#Note: double quotes required because the potential error message (e.g. "sort: -:2: disorder: 8") contains spaces.
-		if [ ! -z "${disordered_pos}" ]
-		then
-			printf "${red_color}\tE3. The .dat file has disordered positions!\n\tSAMPLE SKIPPED!${normal_color}\n\n"
-			
-			ring_error_message="The .dat file has disordered positions!"
-			ring_error_code="E3"
-			printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
-			continue
-		fi
+	#NOTE: we must redirect STDERR to STDOUT in order to capture it in the string
+	disordered_pos=$(cut -f1 /dev/shm/${ts}_reads_tmp.txt|sort -k1,1 -nc 2>&1)
+	#Note: double quotes required because the potential error message (e.g. "sort: -:2: disorder: 8") contains spaces.
+	if [ ! -z "${disordered_pos}" ]
+	then
+		printf "${red_color}\tE3. The .dat file has disordered positions!\n\tSAMPLE SKIPPED!${normal_color}\n\n"
+		
+		ring_error_message="The .dat file has disordered positions!"
+		ring_error_code="E3"
+		printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		
+		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+		#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+		fnct_write_warning_and_errors_to_stats_files
+		continue
+	fi
 
 	#Get stats per ring for .dat [2017-07-03]
 	#--------------------------------------------------------------------
@@ -2053,19 +2068,27 @@ do
 		#2
 		#7
 	
-		#Check E4 (.dat): missing rings ? [2017-07-03]
+		#[2023-03-13] Check W24 (.dat): missing rings ? 
+		#	Note: previously (2017-07-03)error E4, but since ring no from .dat files is not taken into consideration, we changed that to a warning.
 		#--------------------------------------------------------------------
 		if [ -s /dev/shm/${ts}_reads_tmp_missing_rings.txt ]
 		then
-			printf "\t${red_color}E4. The .dat file is missing some rings!\n"
-			perl -pe 's/^/\t\t/g' /dev/shm/${ts}_reads_tmp_missing_rings.txt
-			printf "\tSAMPLE SKIPPED!\n${normal_color}"
-			awk -F "\t" -v sn=${sample_name} '{print sn"\t"$1"\tE4\tMissing ring in the .dat file"}' /dev/shm/${ts}_reads_tmp_missing_rings.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
-			continue
+			#Add warning to the log
+			ring_error_message="The .dat file is missing some rings."
+			ring_error_code="W24"
+			printf "${yellow_color}${ring_error_code}. ${ring_error_message}\n"
+			printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		
+			#Before 2023-03-13
+				#printf "\t${red_color}E4. The .dat file is missing some rings!\n"
+				#perl -pe 's/^/\t\t/g' /dev/shm/${ts}_reads_tmp_missing_rings.txt
+				#printf "\tSAMPLE SKIPPED!\n${normal_color}"
+				#awk -F "\t" -v sn=${sample_name} '{print sn"\t"$1"\tE4\tMissing ring in the .dat file"}' /dev/shm/${ts}_reads_tmp_missing_rings.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+				
+				#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+				#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+				#fnct_write_warning_and_errors_to_stats_files
+				#continue
 		fi
 
 		#Check W1 (.dat): rings with less reads than allowed in min_reads_per_ring_dat [2017-07-03]
@@ -2085,79 +2108,82 @@ do
 	
 
 	#Check E5/E11/W2 (.dat): Check for abnormal (<> 0.04) gaps between reads [2017-07-04]
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+	#List abnormal steps (different than step variable, normally=0.04) between reads:
+	paste <(cut -f1,3 /dev/shm/${ts}_reads_tmp.txt) <(cat <(cut -f1,3 /dev/shm/${ts}_reads_tmp.txt|tail -n+2) <(printf "xxx\txxx\n"))|awk -F "\t" -v incr=${step} '{if ($3 != "xxx") print $0"\t"$3-$1"\t"($3-$1)/incr}'|awk -F "\t" -v incr=${step} '{if ($5 != incr) print $0}' > /dev/shm/${ts}_reads_tmp_abnormal_steps.txt
+	#Line before 1/10/2019 (was omitting when gaps were smaller than the step): paste <(cut -f1,3 /dev/shm/${ts}_reads_tmp.txt) <(cat <(cut -f1,3 /dev/shm/${ts}_reads_tmp.txt|tail -n+2) <(printf "xxx\txxx\n"))|awk -F "\t" -v incr=${step} '{if ($3 != "xxx") print $0"\t"$3-$1"\t"($3-$1)/incr}'|awk -F "\t" -v incr=${step} '{if ($6 >=10) print $0"\tMAJ"; else if ($6 <10 && $6 >1) print $0"\tmin"}' > /dev/shm/${ts}_reads_tmp_abnormal_steps.txt
 	
-		#List abnormal steps (different than step variable, normally=0.04) between reads:
-		paste <(cut -f1,3 /dev/shm/${ts}_reads_tmp.txt) <(cat <(cut -f1,3 /dev/shm/${ts}_reads_tmp.txt|tail -n+2) <(printf "xxx\txxx\n"))|awk -F "\t" -v incr=${step} '{if ($3 != "xxx") print $0"\t"$3-$1"\t"($3-$1)/incr}'|awk -F "\t" -v incr=${step} '{if ($5 != incr) print $0}' > /dev/shm/${ts}_reads_tmp_abnormal_steps.txt
-		#Line before 1/10/2019 (was omitting when gaps were smaller than the step): paste <(cut -f1,3 /dev/shm/${ts}_reads_tmp.txt) <(cat <(cut -f1,3 /dev/shm/${ts}_reads_tmp.txt|tail -n+2) <(printf "xxx\txxx\n"))|awk -F "\t" -v incr=${step} '{if ($3 != "xxx") print $0"\t"$3-$1"\t"($3-$1)/incr}'|awk -F "\t" -v incr=${step} '{if ($6 >=10) print $0"\tMAJ"; else if ($6 <10 && $6 >1) print $0"\tmin"}' > /dev/shm/${ts}_reads_tmp_abnormal_steps.txt
-		
-		#/dev/shm/${ts}_reads_tmp_abnormal_steps.txt
-		#6.160	9	11.240	8	5.08	127
-		#17.360	7	25.120	6	7.76	194
-		#29.400	5	29.480	5	0.08	2
-		#50.400	2	50.800	2	0.4	10
-		#Where
-		#Col1: position
-		#col2: ring
-		#Col3: next read pos
-		#Col4: next read ring
-		#Col5: difference in pos (mm) between position and next position.
-		#Col6: Col5/step: number of times the gap is compared to the step.
-		
+	#/dev/shm/${ts}_reads_tmp_abnormal_steps.txt
+	#6.160	9	11.240	8	5.08	127
+	#17.360	7	25.120	6	7.76	194
+	#29.400	5	29.480	5	0.08	2
+	#50.400	2	50.800	2	0.4	10
+	#Where
+	#Col1: position
+	#col2: ring
+	#Col3: next read pos
+	#Col4: next read ring
+	#Col5: difference in pos (mm) between position and next position.
+	#Col6: Col5/step: number of times the gap is compared to the step.
 	
-		#Pct of abnormal steps [NEW: 2019-10-01]
-		pct_abnormal_steps=$(printf "$(cat /dev/shm/${ts}_reads_tmp_abnormal_steps.txt|wc -l)\t$(cat /dev/shm/${ts}_reads_tmp.txt|wc -l)\n"|awk -F "\t" '{ printf "%.*f\n",2, $1/$2*100}')
+
+	#Pct of abnormal steps [NEW: 2019-10-01]
+	pct_abnormal_steps=$(printf "$(cat /dev/shm/${ts}_reads_tmp_abnormal_steps.txt|wc -l)\t$(cat /dev/shm/${ts}_reads_tmp.txt|wc -l)\n"|awk -F "\t" '{ printf "%.*f\n",2, $1/$2*100}')
+	
+	#Distribution of gaps different than those expected from step (e.g. 0.04) [NEW: 2019-10-01]
+	cut -f5 -d $'\t' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt|sort|uniq -c|perl -pe 's/^ +(\d+) ([\d.]+)/\2\t\1/g'|awk -F "\t" -v all_reads_count=$(cat /dev/shm/${ts}_reads_tmp.txt|wc -l) '{print$1"\t"$2"\t"$2/all_reads_count}'|sort -k1,1nr > /dev/shm/${ts}_abnormal_steps_distro.txt
+	
+	#E11: Reads systematically spaced differently than expected from the step parameter (e.g. 0.04) [NEW: 2019-10-01]
+	#Chech if pct_abnormal_steps > 50%
+	if [ $(echo $pct_abnormal_steps|awk '{if ($1 > 50) print}'|wc -l) -gt 0 ]
+	then
+		#awk -F "\t" -v incr=${step} -v sn=${sample_name} '{print sn"\t"$2"\tE5\tSpaces between reads systematically differ from those expected for >50% of reads ("incr"). Here is the distribution:"}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		printf "${sample_name}\tALL\tSpaces between reads systematically differ from those expected for >50%% of reads (${step}).\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+				
+		printf "\t${red_color}E11: The .dat file has gaps between reads that systematically differ from those expected (${step})! Here is the distribution:\n"
+		printf "\tgap\tcount\tpct all reads\n"
+		perl -pe 's/^/\t/g' /dev/shm/${ts}_abnormal_steps_distro.txt
 		
-		#Distribution of gaps different than those expected from step (e.g. 0.04) [NEW: 2019-10-01]
-		cut -f5 -d $'\t' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt|sort|uniq -c|perl -pe 's/^ +(\d+) ([\d.]+)/\2\t\1/g'|awk -F "\t" -v all_reads_count=$(cat /dev/shm/${ts}_reads_tmp.txt|wc -l) '{print$1"\t"$2"\t"$2/all_reads_count}'|sort -k1,1nr > /dev/shm/${ts}_abnormal_steps_distro.txt
+		printf "\tSAMPLE SKIPPED!${normal_color}\n"
 		
-		#E11: Reads systematically spaced differently than expected from the step parameter (e.g. 0.04) [NEW: 2019-10-01]
-		#Chech if pct_abnormal_steps > 50%
-		if [ $(echo $pct_abnormal_steps|awk '{if ($1 > 50) print}'|wc -l) -gt 0 ]
-		then
-			#awk -F "\t" -v incr=${step} -v sn=${sample_name} '{print sn"\t"$2"\tE5\tSpaces between reads systematically differ from those expected for >50% of reads ("incr"). Here is the distribution:"}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			printf "${sample_name}\tALL\tSpaces between reads systematically differ from those expected for >50%% of reads (${step}).\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-					
-			printf "\t${red_color}E11: The .dat file has gaps between reads that systematically differ from those expected (${step})! Here is the distribution:\n"
-			printf "\tgap\tcount\tpct all reads\n"
-			perl -pe 's/^/\t/g' /dev/shm/${ts}_abnormal_steps_distro.txt
-			
-			printf "\tSAMPLE SKIPPED!${normal_color}\n"
-			
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
-			continue
-		fi
+		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+		#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+		fnct_write_warning_and_errors_to_stats_files
+		continue
+	fi
+	
+	#E5: Large gaps (>= 10x step)
+	#Line before 1/10/2019: if [ $(grep 'MAJ' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt|wc -l) -gt 0 ]
+	if [ $(awk -F "\t" '{if ($5 > 10) print}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt|wc -l) -gt 0 ]
+	
+	then
+		#Inscrit dans ${ts}_current_sample_ring_errors_and_warnings.txt le "gap", de la lecture actuelle vers la prochaine, et vice-versa.
+		#Génère donc 2 messages d'erreur à la fois.
+		awk -F "\t" -v sn=${sample_name} '{if ($6 >= 10) print sn"\t"$2"\tE5\tLarge gap ("$5" mm) from position "$1" to next position "$3"."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		awk -F "\t" -v sn=${sample_name} '{if ($6 >= 10) print sn"\t"$4"\tE5\tLarge gap ("$5" mm) from position "$3" to previous position "$1"."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
 		
-		#E5: Large gaps (>= 10x step)
-		#Line before 1/10/2019: if [ $(grep 'MAJ' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt|wc -l) -gt 0 ]
-		if [ $(awk -F "\t" '{if ($5 > 10) print}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt|wc -l) -gt 0 ]
+		printf "\t${red_color}E5: The .dat file has major gaps between reads!\n\tSAMPLE SKIPPED!${normal_color}\n"
 		
-		then
-			#Inscrit dans ${ts}_current_sample_ring_errors_and_warnings.txt le "gap", de la lecture actuelle vers la prochaine, et vice-versa.
-			#Génère donc 2 messages d'erreur à la fois.
-			awk -F "\t" -v sn=${sample_name} '{if ($6 >= 10) print sn"\t"$2"\tE5\tLarge gap ("$5" mm) from position "$1" to next position "$3"."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			awk -F "\t" -v sn=${sample_name} '{if ($6 >= 10) print sn"\t"$4"\tE5\tLarge gap ("$5" mm) from position "$3" to previous position "$1"."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			
-			printf "\t${red_color}E5: The .dat file has major gaps between reads!\n\tSAMPLE SKIPPED!${normal_color}\n"
-			
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
-			continue
-		
-		fi
+		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+		#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+		fnct_write_warning_and_errors_to_stats_files
+		continue
+	
+	fi
 
 
-		#W2: Other gaps (<10x step) if none of the errors above (E5, E11) were found
-		if [ $(grep 'min' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt|wc -l) -gt 0 ]
-		then
-			#Add ring(s) to /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			#Line before 1/10/2019: awk -F "\t" -v sn=${sample_name} '{if ($6 < 10) print sn"\t"$2"\tW2\tMinor gap ("$5" mm) from position "$1" to next position "$3"."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			#Line before 1/10/2019: awk -F "\t" -v sn=${sample_name} '{if ($6 < 10) print sn"\t"$4"\tW2\tMinor gap ("$5" mm) from position "$3" to previous position "$1"."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			awk -F "\t" -v incr=${step} -v sn=${sample_name} '{if ($6 < 10) print sn"\t"$2"\tW2\tGap ("$5" mm) from position "$1" to next position "$3" is different from expected ("incr" mm) gap."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			awk -F "\t" -v incr=${step} -v sn=${sample_name} '{if ($6 < 10) print sn"\t"$4"\tW2\tGap ("$5" mm) from position "$3" to previous position "$1" is different from expected ("incr" mm) gap."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-		fi
+	#W2: Other gaps (<10x step) if none of the errors above (E5, E11) were found
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+	if [ $(grep 'min' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt|wc -l) -gt 0 ]
+	then
+		#Add ring(s) to /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		#Line before 1/10/2019: awk -F "\t" -v sn=${sample_name} '{if ($6 < 10) print sn"\t"$2"\tW2\tMinor gap ("$5" mm) from position "$1" to next position "$3"."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		#Line before 1/10/2019: awk -F "\t" -v sn=${sample_name} '{if ($6 < 10) print sn"\t"$4"\tW2\tMinor gap ("$5" mm) from position "$3" to previous position "$1"."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		awk -F "\t" -v incr=${step} -v sn=${sample_name} '{if ($6 < 10) print sn"\t"$2"\tW2\tGap ("$5" mm) from position "$1" to next position "$3" is different from expected ("incr" mm) gap."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		awk -F "\t" -v incr=${step} -v sn=${sample_name} '{if ($6 < 10) print sn"\t"$4"\tW2\tGap ("$5" mm) from position "$3" to previous position "$1" is different from expected ("incr" mm) gap."}' /dev/shm/${ts}_reads_tmp_abnormal_steps.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+	fi
 
 	
 	
@@ -2176,12 +2202,15 @@ do
 
 
 
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	#Clean the .sum info file
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	#1. Remove headers by keeping only rows with real numbers (having 9.9 or 9,9)
 	#2. Remove double quotes
 	#3. Replace commas with periods (some files have commas instead of periods as decimal points)
 	#4. Remove leading spaces or tabs
-	#5. Replace other spaces/tabs (field separators) with single tabs
+	#5. a) Replace interior spaces/tabs with single tabs
+	#    b) Remove trailing spaces/tabs (added 2023-03-13)
 	#6. Test the homogeneity of column numbers (NEW: 23/11/2018) - This allows to avoid partially deleted lines that may cause errors later
 	
 	#7. Keep only the following 5 original columns (Sample ID, Ring No., Year, End mm, Start mm)
@@ -2195,15 +2224,18 @@ do
 	
 	
 	#Steps 1-5
-	grep -E '[0-9](\.|,)[0-9]' "./${infiles_folder}/${sumfile}"|perl -pe 's/"//g'|perl -pe 's/,/./g'|perl -pe 's/^[ \t]+//g'|perl -pe 's/[ \t]+/\t/g' > /dev/shm/${ts}_rings_tmp_part.txt
+	#[Line before 2023-03-13]: grep -E '[0-9](\.|,)[0-9]' "./${infiles_folder}/${sumfile}"|perl -pe 's/"//g'|perl -pe 's/,/./g'|perl -pe 's/^[ \t]+//g'|perl -pe 's/[ \t]+/\t/g' > /dev/shm/${ts}_rings_tmp_part.txt
+	grep -E '[0-9](\.|,)[0-9]' "./${infiles_folder}/${sumfile}"|perl -pe 's/"//g'|perl -pe 's/,/./g'|perl -pe 's/^[ \t]+//g'|perl -pe 's/[ \t]+(\w)/\t\1/g'|perl -pe 's/[ \t]+$//g' > /dev/shm/${ts}_rings_tmp_part.txt
+	
+	#cat -A /dev/shm/${ts}_rings_tmp_part.txt
+	#exit
+	
 	
 	#Step 6
 	#If there are lines with different numbers of columns
 	if [ $(awk -F "\t" '{print NF}' /dev/shm/${ts}_rings_tmp_part.txt|sort -u|wc -l) -gt 1 ]
 	then
-	
 		printf "\t${red_color}E14. The .sum file has an irregular number of columns!\n\tSAMPLE SKIPPED!${normal_color}\n\n"
-						
 		ring_error_message="The .sum file has an irregular number of columns."
 		ring_error_code="E14"
 		printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
@@ -2212,6 +2244,8 @@ do
 		fnct_write_warning_and_errors_to_stats_files
 		continue
 	fi
+	
+	
 	
 	#Steps 7-9
 	awk -F "\t" '{print $(NF-9)"\t"$(NF-8)"\t"$(NF-7)"\t"$(NF-6)"\t"$(NF-5)"\t"$(NF-4)"\t"$(NF-3)"\t"$(NF-2)"\t"$(NF-1)"\t"$NF}' /dev/shm/${ts}_rings_tmp_part.txt|awk -F "\t" -v sn="${sample_name}" '{print sn"\t"$1"\t"$2"\t"$3"\t"$4"\t"$4-$3}'|grep -v '^$' > /dev/shm/${ts}_rings_tmp.txt
@@ -2236,89 +2270,94 @@ do
 		#Col 6: ring width, calculated here.
 	
 	
-	#Check E6 (.sum): cleaned .sum file is empty or without proper header? [2017-07-04]
-	
-		if [ ! -s /dev/shm/${ts}_rings_tmp.txt ]
-		then 
-			
-			printf "\t${red_color}E6. The .sum file is either empty, or does not contain the required header on the line just before data: $(echo $sum_file_header_tag|perl -pe 's/(\\|\^)//g')\n\tSAMPLE SKIPPED!${normal_color}\n\n"
-						
-			ring_error_message="The .sum file is empty or without proper header ($(echo $sum_file_header_tag|perl -pe 's/(\\|\^)//g'))."
-			ring_error_code="E6"
-			printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
-			continue
-		fi
+	#Check E6 (WHOLE .sum): cleaned .sum file is empty or without proper header? [2017-07-04]
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-	#Check E13 (.sum): replicated rings [2017-07-04]
-	
-		if [ $(cut -f2 /dev/shm/${ts}_rings_tmp.txt|sort|uniq -d|wc -l) -gt 0 ]
-		then
-			
-			printf "\t${red_color}E13. The .sum file has replicated ring numbers!\n\tSAMPLE SKIPPED!\n"
-			
-			cut -f1,2 /dev/shm/${ts}_rings_tmp.txt|sort|uniq -d|awk -F "\t" '{print $1"\t"$2"\tE13\tReplicated ring number.\n"}' >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
-			continue
-		fi
-
-
-	#Check E7 (.sum): check that rings number (p2b) are ordered [2017-07-04]
-	
-		disordered_rings=$(cut -f2 /dev/shm/${ts}_rings_tmp.txt|sort -rcn 2>&1)
-		#Note: double quotes required because the potential error message (e.g. "sort: -:2: disorder: 8") contains spaces.
-		if [ ! -z "${disordered_rings}" ]
-		then 
-			printf "\t${red_color}E7. The .sum file has disordered ring numbers!\n\tSAMPLE SKIPPED!${normal_color}\n"
-			ring_error_message="The .sum file has disordered ring numbers!"
-			ring_error_code="E7"
-			printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
-			continue
-		fi
-
-	
-	#Check E8 (.sum): missing rings ? [2017-07-04]
-	
-		#Get first and last ring no
-		min_ring_no_in_sum=$(cut -f2 /dev/shm/${ts}_rings_tmp.txt|sort -n|head -1)
-		max_ring_no_in_sum=$(cut -f2 /dev/shm/${ts}_rings_tmp.txt|sort -n|tail -1)
+	if [ ! -s /dev/shm/${ts}_rings_tmp.txt ]
+	then 
 		
-		#Check for any missing ring by creating an inclusive list between min and max
-		join <(seq $min_ring_no_in_sum $max_ring_no_in_sum|sort) <(awk -F "\t" '{if($1 >= 0) print $2}' /dev/shm/${ts}_rings_tmp.txt|sort) -v1 > /dev/shm/${ts}_rings_tmp_missing_rings.txt
-		#/dev/shm/${ts}_rings_tmp_missing_rings.txt
-		#4
+		printf "\t${red_color}E6. The .sum file is either empty, or does not contain the required header on the line just before data: $(echo $sum_file_header_tag|perl -pe 's/(\\|\^)//g')\n\tSAMPLE SKIPPED!${normal_color}\n\n"
+					
+		ring_error_message="The .sum file is empty or without proper header ($(echo $sum_file_header_tag|perl -pe 's/(\\|\^)//g'))."
+		ring_error_code="E6"
+		printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+		#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+		fnct_write_warning_and_errors_to_stats_files
+		continue
+	fi
+
+
+	#Check E13 (WHOLE .sum): replicated rings [2017-07-04]
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+	if [ $(cut -f2 /dev/shm/${ts}_rings_tmp.txt|sort|uniq -d|wc -l) -gt 0 ]
+	then
 		
-		#If rings are missing from the .sum file
-		if [ -s /dev/shm/${ts}_rings_tmp_missing_rings.txt ]
-		then
-			printf "\t${red_color}E8. The .sum file is missing some rings!\n"
-			perl -pe 's/^/\t\t/g' /dev/shm/${ts}_rings_tmp_missing_rings.txt
-			printf "\tSAMPLE SKIPPED!${normal_color}"
-			awk -F "\t" -v sn=${sample_name} '{print sn"\t"$1"\tE8\tMissing ring in the .sum file"}' /dev/shm/${ts}_rings_tmp_missing_rings.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
-			continue
+		printf "\t${red_color}E13. The .sum file has replicated ring numbers!\n\tSAMPLE SKIPPED!\n"
 		
-		fi
+		cut -f1,2 /dev/shm/${ts}_rings_tmp.txt|sort|uniq -d|awk -F "\t" '{print $1"\t"$2"\tE13\tReplicated ring number.\n"}' >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+		#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+		fnct_write_warning_and_errors_to_stats_files
+		continue
+	fi
+
+
+	#Check E7 (WHOLE .sum): check that rings number (p2b) are ordered [2017-07-04]
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	disordered_rings=$(cut -f2 /dev/shm/${ts}_rings_tmp.txt|sort -rcn 2>&1)
+	#Note: double quotes required because the potential error message (e.g. "sort: -:2: disorder: 8") contains spaces.
+	if [ ! -z "${disordered_rings}" ]
+	then 
+		printf "\t${red_color}E7. The .sum file has disordered ring numbers!\n\tSAMPLE SKIPPED!${normal_color}\n"
+		ring_error_message="The .sum file has disordered ring numbers!"
+		ring_error_code="E7"
+		printf "${sample_name}\tALL\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		
+		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+		#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+		fnct_write_warning_and_errors_to_stats_files
+		continue
+	fi
+
+	
+	#Check E8 (WHOLE .sum): missing rings ? [2017-07-04]
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	#Get first and last ring no
+	min_ring_no_in_sum=$(cut -f2 /dev/shm/${ts}_rings_tmp.txt|sort -n|head -1)
+	max_ring_no_in_sum=$(cut -f2 /dev/shm/${ts}_rings_tmp.txt|sort -n|tail -1)
+	
+	#Check for any missing ring by creating an inclusive list between min and max
+	join <(seq $min_ring_no_in_sum $max_ring_no_in_sum|sort) <(awk -F "\t" '{if($1 >= 0) print $2}' /dev/shm/${ts}_rings_tmp.txt|sort) -v1 > /dev/shm/${ts}_rings_tmp_missing_rings.txt
+	#/dev/shm/${ts}_rings_tmp_missing_rings.txt
+	#4
+	
+	#If rings are missing from the .sum file
+	if [ -s /dev/shm/${ts}_rings_tmp_missing_rings.txt ]
+	then
+		printf "\t${red_color}E8. The .sum file is missing some rings!\n"
+		perl -pe 's/^/\t\t/g' /dev/shm/${ts}_rings_tmp_missing_rings.txt
+		printf "\tSAMPLE SKIPPED!${normal_color}"
+		awk -F "\t" -v sn=${sample_name} '{print sn"\t"$1"\tE8\tMissing ring in the .sum file"}' /dev/shm/${ts}_rings_tmp_missing_rings.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		
+		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+		#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+		fnct_write_warning_and_errors_to_stats_files
+		continue
+	
+	fi
 
 	#[NEW 2022-04-07]: do the ring check only if there was a ring number column in the .dat file
 	#Perform the following only if a ring number column is present in the .dat file. See around line 1817.
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	if [ ${col_ringno_p2b} -ne 999 ]
 	then
 	
-		#Checks W10/W18 (.sum/.dat): all rings in .sum file are in .dat file and vice-versa ? [2017-07-04]
-
+		#Checks W10/W18 (WHOLE .sum/.dat): all rings in .sum file are in .dat file and vice-versa ? [2017-07-04]
+		#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		#Rings in .dat NOT present in .sum (W10)
 		join <(awk -F "\t" '{if ($1 > 0) print $1}' /dev/shm/${ts}_reads_tmp_reads_per_ringno.txt|sort) <(cut -f2 /dev/shm/${ts}_rings_tmp.txt|sort) -v1 > /dev/shm/${ts}_rings_tmp_missing_rings_in_sum_vs_dat.txt
 
@@ -2345,115 +2384,123 @@ do
 
 	fi	#<=== previous sections executed only if .dat has a ring number column
 	
-	#Check E10 (.sum): start pos < end pos ? [2017-07-04]
+	#Check E10 (WHOLE .sum): start pos < end pos ? [2017-07-04]
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	
-		#Get rings with start position (bark to pith) < end position (bark to pith)
-		awk -F "\t" '{if($5 < $4) print}' /dev/shm/${ts}_rings_tmp.txt > /dev/shm/${ts}_rings_tmp_start_pos_lt_end_pos.txt
+	#Get rings with start position (bark to pith) < end position (bark to pith)
+	awk -F "\t" '{if($5 < $4) print}' /dev/shm/${ts}_rings_tmp.txt > /dev/shm/${ts}_rings_tmp_start_pos_lt_end_pos.txt
+	
+	#If there are rings with start pos < end pos
+	if [ -s /dev/shm/${ts}_rings_tmp_start_pos_lt_end_pos.txt ]
+	then
+		printf "${red_color}\tE10. There are rings with starting position LOWER THAN end position in the .sum file!\n"
+		perl -pe 's/^/\t\t/g' /dev/shm/${ts}_rings_tmp_start_pos_lt_end_pos.txt
+		printf "\tSAMPLE SKIPPED!\n${normal_color}"
+		awk -F "\t" '{print $1"\t"$2"\tE10\tRing has a starting position ("$5") LOWER than the ending position ("$4")."}' /dev/shm/${ts}_rings_tmp_start_pos_lt_end_pos.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
 		
-		#If there are rings with start pos < end pos
-		if [ -s /dev/shm/${ts}_rings_tmp_start_pos_lt_end_pos.txt ]
-		then
-			printf "${red_color}\tE10. There are rings with starting position LOWER THAN end position in the .sum file!\n"
-			perl -pe 's/^/\t\t/g' /dev/shm/${ts}_rings_tmp_start_pos_lt_end_pos.txt
-			printf "\tSAMPLE SKIPPED!\n${normal_color}"
-			awk -F "\t" '{print $1"\t"$2"\tE10\tRing has a starting position ("$5") LOWER than the ending position ("$4")."}' /dev/shm/${ts}_rings_tmp_start_pos_lt_end_pos.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			
-			#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-			#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-			fnct_write_warning_and_errors_to_stats_files
-			continue
-		fi
+		#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+		#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+		fnct_write_warning_and_errors_to_stats_files
+		continue
+	fi
 	
-	#Check W11 (.sum): ring width > max_ring_width_factor times median ring width ? [2017-07-04, 2017-09-18]
+	#Check W11 (WHOLE .sum): ring width > max_ring_width_factor times median ring width ? [2017-07-04, 2017-09-18]
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	#Previously an error (E11), now a warning only.
-		#Get median width, to get rid of extremes, and calculate deviation from median.
-		cut -f6 /dev/shm/${ts}_rings_tmp.txt|sort -n > /dev/shm/${ts}_rings_tmp_ordered_widths.txt
-		#-38.04
-		#1.32
-		#3.32
-		#3.92
-		#4.16
-		#4.44
-		#4.52
-		#5.36
-		#5.6
-		#5.88
-		#5.96
-		#11.24
-		#43
-		
-		#Get the WIDTH median value
-		fnct_get_median_value /dev/shm/${ts}_rings_tmp_ordered_widths.txt
-		
-		#echo median_value: $median_value
-		
-		
+	#Get median width, to get rid of extremes, and calculate deviation from median.
+	cut -f6 /dev/shm/${ts}_rings_tmp.txt|sort -n > /dev/shm/${ts}_rings_tmp_ordered_widths.txt
+	#-38.04
+	#1.32
+	#3.32
+	#3.92
+	#4.16
+	#4.44
+	#4.52
+	#5.36
+	#5.6
+	#5.88
+	#5.96
+	#11.24
+	#43
 	
-		#Get the lines where width is > max_ring_width_factor x the median width
-		#[8/9/2017] Now based on a variable
-		awk -F "\t" -v mv=${median_value} -v mrwf=${max_ring_width_factor} '{if($6 > mv*mrwf) print $0"\t"mv}' /dev/shm/${ts}_rings_tmp.txt > /dev/shm/${ts}_rings_tmp_many_x_median_width.txt
-		
-		#If there are such values, add a W11 warning
-		if [ -s /dev/shm/${ts}_rings_tmp_many_x_median_width.txt ]
-		then
-			#Below is redundant, as the W11 error message will be displayed (via /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt) within each ring.
-				#printf "\t${yellow_color}W11. There are rings > ${max_ring_width_factor}x the median ring width in the .sum file!\n"
-				#printf "\t\tSmpl\tRing\tYear\tEnd\tStart\tWidth\tMedian width\n"	#[20190715]
-				#perl -pe 's/^/\t\t/g' /dev/shm/${ts}_rings_tmp_many_x_median_width.txt
-				#printf "${normal_color}"
-			
-			#Add ring(s) to /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			awk -F "\t" -v mrwf=${max_ring_width_factor} '{print $1"\t"$2"\tW11\tRing width ("$6" mm) is >"mrwf"x the median ring width ("$7")!"}' /dev/shm/${ts}_rings_tmp_many_x_median_width.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			
-		fi
-
+	#Get the WIDTH median value
+	fnct_get_median_value /dev/shm/${ts}_rings_tmp_ordered_widths.txt
 	
-	#Check W8 (.sum): Check for inconsistencies between current ring end position and next ring start position [28/6/2017]
+	#echo median_value: $median_value
+	
+	
+
+	#Get the lines where width is > max_ring_width_factor x the median width
+	#[8/9/2017] Now based on a variable
+	awk -F "\t" -v mv=${median_value} -v mrwf=${max_ring_width_factor} '{if($6 > mv*mrwf) print $0"\t"mv}' /dev/shm/${ts}_rings_tmp.txt > /dev/shm/${ts}_rings_tmp_many_x_median_width.txt
+	
+	#If there are such values, add a W11 warning
+	if [ -s /dev/shm/${ts}_rings_tmp_many_x_median_width.txt ]
+	then
+		#Below is redundant, as the W11 error message will be displayed (via /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt) within each ring.
+			#printf "\t${yellow_color}W11. There are rings > ${max_ring_width_factor}x the median ring width in the .sum file!\n"
+			#printf "\t\tSmpl\tRing\tYear\tEnd\tStart\tWidth\tMedian width\n"	#[20190715]
+			#perl -pe 's/^/\t\t/g' /dev/shm/${ts}_rings_tmp_many_x_median_width.txt
+			#printf "${normal_color}"
 		
-		#				ring end	ring start
-		#				\/		\/
-		#	A6	8	2014	2.32		6.20
-		#	A6	7	2013	6.20		10.88
-		#	A6	6	2012	10.88		16.88
-		#	A6	5	2011	16.88		22.64
-		#	A6	4	2010	22.64		28.88
-		#	A6	3	2009	28.88		35.08
-		#	A6	2	2008	35.08		**41.00**
-		#	A6	1	2007	**41.04**	46.24
-		#	Here, there is an inconsistency between ring 1's end position (41.04) and ring 2's start position, as they should be equal.
-
-		#Add a column with the next ring's start position, simply by offsetting down by 1 the start_pos. The last ring will have the next ring start pos filled with xxx
-		cat <(printf "ringno\tend_pos\tstart_pos\tnext_ringno\tnext_r_start_pos\n") <(paste <(cut -f2,4,5 /dev/shm/${ts}_rings_tmp.txt) <(cat <(printf "xxx\txxx\n") <(cut -f2,5 /dev/shm/${ts}_rings_tmp.txt|head -n-1))) > /dev/shm/${ts}_rings_tmp_with_next_ring_start_pos.txt
-		#/dev/shm/${ts}_rings_tmp_with_rev_ring_start_pos.txt
-		#	ringno  end_pos start_pos       next_ringno     next_r_start_pos
-		#	8       2.32    6.20    xxx     xxx
-		#	7       6.20    10.88   8       6.20
-		#	6       10.88   16.88   7       10.88
-		#	5       16.88   22.64   6       16.88
-		#	4       22.64   28.88   5       22.64
-		#	3       28.88   35.08   4       28.88
-		#	2       35.08   41.00   3       35.08
-		#	1       41.04   46.24   2       41.00
-
-		#Removing header and last ring (xxx), compare current ring's end position with next ring's start position.
-		#List any discrepancies.
-		tail -n+2 /dev/shm/${ts}_rings_tmp_with_next_ring_start_pos.txt |grep -v 'xxx'|awk -F "\t" '{if($2 != $5) print $1"\t"$2"\t"$4"\t"$5}' > /dev/shm/${ts}_rings_tmp_inconsistensies_between_ring_end_pos_and_next_ring_start_pos.txt
-		#1       41.04   2       41.00
+		#Add ring(s) to /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		awk -F "\t" -v mrwf=${max_ring_width_factor} '{print $1"\t"$2"\tW11\tRing width ("$6" mm) is >"mrwf"x the median ring width ("$7")!"}' /dev/shm/${ts}_rings_tmp_many_x_median_width.txt >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		
+	fi
 
 	
-		#Warning messages if any.
-		#NOTE: this is done for ALL RINGS at once, not each ring at a time
-		if [ -s /dev/shm/${ts}_rings_tmp_inconsistensies_between_ring_end_pos_and_next_ring_start_pos.txt ]
-		then 
-
+	#Check W8 (WHOLE .sum): Check for inconsistencies between current ring end position and next ring start position [28/6/2017]
+	#--------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		
-			#Add ring(s) to /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-			#NOTE: it will add a warning for each ring involved (e.g. ring 4 end position differs from ring 5 dtart position: both rings will be listed as separate lines.
-			#	Hence, not using the ring_error_message here because there will be >=2 lines with different messages.
-			cat <(awk -F "\t" -v sn=${sample_name} '{print sn"\t"$1"\tW8f\tRing "$1" end pos ("$2") differs from ring "$3" start pos ("$4")"}' /dev/shm/${ts}_rings_tmp_inconsistensies_between_ring_end_pos_and_next_ring_start_pos.txt) <(awk -F "\t" -v sn=${sample_name} '{print sn"\t"$3"\tW8r\tRing "$3" start pos ("$4") differs from ring "$1" end pos ("$2")"}' /dev/shm/${ts}_rings_tmp_inconsistensies_between_ring_end_pos_and_next_ring_start_pos.txt)|sort -k2,2n >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+	#				ring end	ring start
+	#				\/		\/
+	#	A6	8	2014	2.32		6.20
+	#	A6	7	2013	6.20		10.88
+	#	A6	6	2012	10.88		16.88
+	#	A6	5	2011	16.88		22.64
+	#	A6	4	2010	22.64		28.88
+	#	A6	3	2009	28.88		35.08
+	#	A6	2	2008	35.08		**41.00**
+	#	A6	1	2007	**41.04**	46.24
+	#	Here, there is an inconsistency between ring 1's end position (41.04) and ring 2's start position, as they should be equal.
 
-		fi
+	#Add a column with the next ring's start position, simply by offsetting down by 1 the start_pos. The last ring will have the next ring start pos filled with xxx
+	cat <(printf "ringno\tend_pos\tstart_pos\tnext_ringno\tnext_r_start_pos\n") <(paste <(cut -f2,4,5 /dev/shm/${ts}_rings_tmp.txt) <(cat <(printf "xxx\txxx\n") <(cut -f2,5 /dev/shm/${ts}_rings_tmp.txt|head -n-1))) > /dev/shm/${ts}_rings_tmp_with_next_ring_start_pos.txt
+	#/dev/shm/${ts}_rings_tmp_with_rev_ring_start_pos.txt
+	#	ringno  end_pos start_pos       next_ringno     next_r_start_pos
+	#	8       2.32    6.20    xxx     xxx
+	#	7       6.20    10.88   8       6.20
+	#	6       10.88   16.88   7       10.88
+	#	5       16.88   22.64   6       16.88
+	#	4       22.64   28.88   5       22.64
+	#	3       28.88   35.08   4       28.88
+	#	2       35.08   41.00   3       35.08
+	#	1       41.04   46.24   2       41.00
+
+	#Removing header and last ring (xxx), compare current ring's end position with next ring's start position.
+	#List any discrepancies.
+	tail -n+2 /dev/shm/${ts}_rings_tmp_with_next_ring_start_pos.txt |grep -v 'xxx'|awk -F "\t" '{if($2 != $5) print $1"\t"$2"\t"$4"\t"$5}' > /dev/shm/${ts}_rings_tmp_inconsistensies_between_ring_end_pos_and_next_ring_start_pos.txt
+	#1       41.04   2       41.00
+
+
+	#Warning messages if any.
+	#NOTE: this is done for ALL RINGS at once, not each ring at a time
+	if [ -s /dev/shm/${ts}_rings_tmp_inconsistensies_between_ring_end_pos_and_next_ring_start_pos.txt ]
+	then 
+
 	
+		#Add ring(s) to /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+		#NOTE: it will add a warning for each ring involved (e.g. ring 4 end position differs from ring 5 dtart position: both rings will be listed as separate lines.
+		#	Hence, not using the ring_error_message here because there will be >=2 lines with different messages.
+		cat <(awk -F "\t" -v sn=${sample_name} '{print sn"\t"$1"\tW8f\tRing "$1" end pos ("$2") differs from ring "$3" start pos ("$4")"}' /dev/shm/${ts}_rings_tmp_inconsistensies_between_ring_end_pos_and_next_ring_start_pos.txt) <(awk -F "\t" -v sn=${sample_name} '{print sn"\t"$3"\tW8r\tRing "$3" start pos ("$4") differs from ring "$1" end pos ("$2")"}' /dev/shm/${ts}_rings_tmp_inconsistensies_between_ring_end_pos_and_next_ring_start_pos.txt)|sort -k2,2n >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+
+	fi
+	
+	
+	#exit
+	
+	#Going through each row (ring) of the corrected rings file
+	#----------------------------------------------------------------------------------------------------------
 	
 	#Create corrected files: 1) 001_corr_reads.txt (all reads), 2) 001_corr_ring_stats.txt (ring stats).
 	printf "" > "${temp_f}/corrected_files/${sample_name}_corr_reads.txt"
@@ -2478,6 +2525,7 @@ do
 			#...hence ring start position will be equal to ring first read position (=previous ring end position in this .sum file) - read step (0.04)
 			#Since samples are read in the bark-to-pith direction, this value is higher than the one for ring_end_pos.
 			ring_start_pos=$(echo "scale=3;$(echo ${rings_line}|cut -f5 -d $'\t')-$step"|bc)
+			
 			
 			#Examples: A-2142-5-1.sum (E952 SMarTForests dataset)
 			#	|--------.sum file-------------------|	|-----------------script-----------------|
@@ -2507,6 +2555,25 @@ do
 	
 		#Extract all .dat lines with POSITIONS (not ring number) within the ring_end_pos and ring_start_pos (both included) limits
 		#...and add sample number, ring year and ring no as first columns
+		#----------------------------------------------------------------------------------------------------------
+		#NOTE: 2023-03-09
+		#	When interdating of sampled trees was done, rings with 0 width are sometimes added to the .sum file by the operator.
+		#	This represents cases where these rings are known to exist for these years, as shown by stand interdatation, but could not be found by densitometry for the current tree.
+		#	Adding them allows to have ring years synchronized with the rest of the ring-dated trees.
+		#	Below is an example from the 20326177 sample, collected in 2017 at Acadia Research Forest (E60A).
+		#	In those cases, no reads will be found from the command below, and those rings will be absent from the resulting files *_corr_reads.txt and *_corr_ring_stats.txt.
+		#									      Late
+		#							      Wood    Ring    Late    Early   Late    Ring
+		#				  Ring        	End     Start   Width   Width   Wood    Wood    Wood   Average
+		#	Study ID     Sample ID    No.  Year    mm      mm      mm      mm    Percent Density Density Density
+		#	    20326177          177  38  2015    1.42    1.56    0.04    0.14   28.57  405.49  538.97  443.63
+		#	    20326177          177  37  2014    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00
+		#	    20326177          177  36  2013    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00
+		#	    20326177          177  35  2012    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00
+		#	    20326177          177  34  2011    1.56    1.68    0.04    0.12   33.33  474.07  525.36  491.16
+		#	    20326177          177  33  2010    1.68    1.90    0.04    0.22   18.18  389.40  523.03  413.70
+
+		
 		#if $1 >= last: if position (bark-to-pith) is greater or equal to ring end position (e.g. 1.2 cm)
 		#	and
 		#if $1 <= first: if position (bark-to-pith) is less or equal to ring start position (e.g. 4.0 cm)
@@ -2554,6 +2621,7 @@ do
 		rejected_reads_counts=0
 		
 		#Check if current ring (from .SUM file) is the first or last (from pith)
+		#----------------------------------------------------------------------------------------------------------
 		#1. A removal of low density reads on both ends will be performed
 		#2. For first ring, it will be added to a list of invalid rings is the first ring is considered systematically as the pith (first_ring_is_pith=1) [2019-07-12]
 		if [ $ring_no -eq $min_ring_no_in_sum ] || [ $ring_no -eq $max_ring_no_in_sum ]
@@ -2561,6 +2629,7 @@ do
 			#echo min or max ring $ringno
 			
 			#First ring (pith side)
+			#----------------------------------------------------------------------------------------------------------
 			if [ $ring_no -eq $min_ring_no_in_sum ]
 			then
 				
@@ -2689,6 +2758,7 @@ do
 			fi	#Done: first ring (pith side)
 #exit			
 			#Last ring (bark side)
+			#----------------------------------------------------------------------------------------------------------
 			if [ $ring_no -eq $max_ring_no_in_sum ]
 			then
 				#echo "last ring bark side: ${ring_no}"
@@ -2790,6 +2860,7 @@ do
 			#Note 1: This was already checked on the original .dat file (W1), but the status may have changed after the removal of reads of low density above
 			
 			#This condition ensures that the following block is done only when there were some low-density reads removal above
+			#----------------------------------------------------------------------------------------------------------
 			if [ ${rejected_reads_counts} -gt 0 ]
 			then
 				
@@ -2855,13 +2926,14 @@ do
 		transition_dens="\N"
 			
 		
-		#Go on to calculate stats and transition only if there are actual reads for that ring in the .dat file (after removal of low-density reads from first/last rings).
+		#Go on to CALCULATE STATS AND TRANSITION ONLY IF THERE ARE ACTUAL READS for that ring in the .dat file (after removal of low-density reads from first/last rings).
 		#Note: this can be any ring (first, last, or any in between)
+		#----------------------------------------------------------------------------------------------------------
 		if [ ${number_of_reads} -gt 0 ]
 		then
 					
 			#[NEW 4/7/2018]
-			#Like for the regroup_ss_dataXXXXXXXX.txt script, create a list of densities without extreme values (< min_allowed_density OR > max_allowed_density)
+			#Like for the regroup_ss_data.txt script, create a list of densities without extreme values (< min_allowed_density OR > max_allowed_density)
 			#Removal of those outside-range densities is ONLY for min/max/avg/mid-range/median density calculations
 			#...the extreme reads WILL BE kept in the final file.
 					
@@ -2875,6 +2947,7 @@ do
 			curr_ring_extreme_reads=$(cat /dev/shm/${ts}_current_ring_densities_outside_boundaries.txt|wc -l)
 
 			#If some extremet density values were found, warn
+			#----------------------------------------------------------------------------------------------------------
 			if [ ${curr_ring_extreme_reads} -gt 0 ]
 			then
 				ring_error_message="There are some extreme density (< ${min_allowed_density} OR > ${max_allowed_density} kg/m3) reads in the .DAT file. These reads will be removed before calculating stats (min/mx/avg/median), but will be kept in the final file."
@@ -2960,6 +3033,7 @@ do
 			#If there are still at least 2 density reads after removing the extremes, calculate the stats
 			#[NEW 4/7/2018]
 			#Otherwise, transition WILL NOT BE CALCULATED
+			#----------------------------------------------------------------------------------------------------------
 			if [ ${curr_ring_clean_reads} -gt 1 ]
 			then
 				#Calculate stats from densities where extremes were removed (/dev/shm/${ts}_current_ring_clean_densities_ordered.txt)
@@ -3004,6 +3078,7 @@ do
 
 				
 			#Check if there are enough reads to calculate transition (once low density reads (if any) were removed from FIRST and LAST ring. Extreme density reads kept)
+			#----------------------------------------------------------------------------------------------------------
 			#[NEW: 5/7/2018] added the requirement to have a valid transition density, calculated only when sufficient cleaned density reads are available.
 			if [ ${number_of_reads} -ge ${min_reads_for_transition} ] && [ ${transition_dens} != "\N" ]
 			then #there are enough reads
@@ -3043,6 +3118,7 @@ do
 
 
 				#Determine transition. Note that there might be several lines meeting theses criteria!
+				#----------------------------------------------------------------------------------------------------------
 				#[NEW 5/7/2016]: save all possible lines where criteria met, then choose according to a parameter.
 				
 				#Find where latewood starts. Latewood begins at the first line where: 
@@ -3057,6 +3133,7 @@ do
 #exit							
 				#5/7/2016
 				#If transition WAS found
+				#----------------------------------------------------------------------------------------------------------
 				if [ $transition_rows_found -gt 0 ]
 				then
 		
@@ -3128,6 +3205,7 @@ do
 					
 					
 				else #transition NOT found ($transition_rows_found = 0) using the median density
+					#----------------------------------------------------------------------------------------------------------
 					#[NEW: 5/7/2018] ... or because transition density could not be calculated.
 					
 					first_latewood_position=""
@@ -3178,6 +3256,7 @@ do
 	
 			
 			else	#Not enough reads to calculate transition, simply add "\N" as transition at the end of the file.
+				#----------------------------------------------------------------------------------------------------------
 				#[NEW: 5/7/2018] Or simply no transition density.
 				
 				#Ok with new line numbering (14/6/2017)
@@ -3229,6 +3308,7 @@ do
 
 
 			#Put that in the corrected reads file
+			#----------------------------------------------------------------------------------------------------------
 			#Ok with new line numbers, 14/6/2017
 			cat /dev/shm/${ts}_current_ring_reads_with_transition_tmp.txt >> "${temp_f}/corrected_files/${sample_name}_corr_reads.txt"
 		
@@ -3251,6 +3331,7 @@ do
 			#exit 
 					
 			#If a transition was found and the minimal reads number is achieved, calculate ew/lw stats
+			#----------------------------------------------------------------------------------------------------------
 			#Line before 6/7/2016: if [ ! -z ${first_latewood_position} ] && [ ${number_of_reads} -ge ${min_reads_for_transition} ]
 			#Line before 18/9/2017: if [ ${transition_rows_found} -gt 0 ] && [ ${number_of_reads} -ge ${min_reads_for_transition} ]
 			#	Note: changed 18/9/2017 because in some cases
@@ -3299,6 +3380,7 @@ do
 
 
 			#If no transition was found or the minimal number of reads was not reached
+			#----------------------------------------------------------------------------------------------------------
 			else
 				min_ew_dens="\N"
 				min_lw_dens="\N"
@@ -3330,24 +3412,55 @@ do
 			#fi
 		
 		else	#No reads found in .dat file for that ring!
-			
-			#Check E12 (.sum/.dat): no reads found between start and end positions.
+			#When no reads found in .dat between start and end positions of .sum:
+			#	W23 (zero start/end position ring in .sum file) - added 2023-03-09
+			#		or
+			#	E12 (valid start/end position values in .sum file, just nothing corresponding found in .dat)
+			#----------------------------------------------------------------------------------------------------------
 				#NOTE: this might be because:
 				#	1) there really weren't any reads in .dat file corresponding to the range in .sum file
 				#	2) all reads were removed because they were low-density reads
+				#	3) [2023-03-09]: zero-width rings were inserted in the .sum file following tree-ring dating
 				#Here, the ring_end_pos and ring_start_pos refer to those from the *_corr_ring_tmp.file
-				#****************************************
-				ring_error_message="No reads found between end (${ring_end_pos}) and start (${ring_start_pos}) positions in .dat file corresponding to .sum file ring number ${ring_no}. THE WHOLE .sum FILE SHOULD BE REDONE."
-				ring_error_code="E12"
-				#Add ring error code and message to the file
-				printf "${sample_name}\t${ring_no}\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
 				
-				#[20190626]: The next 4 lines had been forgotten.
-				#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-				#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-				fnct_write_warning_and_errors_to_stats_files
-				continue
-		
+				
+				#2023-03-09: Zero-width ring found. This represents case #3 above
+				#2023-03-13: No longer uniquely for zero values of start/end positions. Any equality between the two will be considered as zero-width ring.
+				#The following line check if end position and start position in current .sum line are equal to 0.
+				#If they are, it will generate a line, which will then be row-counted as 1
+				#Line before 2023-03-13: if [ $(echo ${rings_line}|awk -F "\t" '{if ($4 == 0 && $5 == 0) print}'|wc -l) -eq 1 ]
+				if [ $(echo ${rings_line}|awk -F "\t" '{if ($4 == $5 ) print}'|wc -l) -eq 1 ]
+				#ex: E60-A-2-032-6-177       36      2013    0.00    0.00    0
+				then
+					ring_error_message="Zero-width ring found in .sum file."
+					ring_error_code="W23"
+					#Add ring to /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+					printf "${sample_name}\t${ring_no}\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+				
+					#Add a line to /dev/shm/${ts}_other_invalid_rings.txt
+					#Column 1: sample name
+					#Column 2: ring number
+					#Col 3: error message
+					#Col 4: 9 = invalid_rings_determination_methods.id 
+					#Col 5: FALSE = invalid_rings.is_pith
+					#Col 6: NULL = invalid_rings.team_id (no team, auto-generated)
+					printf "${sample_name}\t${ring_no}\t${ring_error_message} Auto-flagged by $0 on ${pgf_date}.\t9\tFALSE\tNULL\n" >> /dev/shm/${ts}_other_invalid_rings.txt
+					current_sample_invalid_rings+=1
+				
+				
+				else # Just no corresponding reads found in the .dat file
+				
+					ring_error_message="No reads found between end (${ring_end_pos}) and start (${ring_start_pos}) positions in .dat file corresponding to .sum file ring number ${ring_no}. THE WHOLE .sum FILE SHOULD BE REDONE."
+					ring_error_code="E12"
+					#Add ring error code and message to the file
+					printf "${sample_name}\t${ring_no}\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+				
+					#[20190626]: The next 4 lines had been forgotten.
+					#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
+					#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+					fnct_write_warning_and_errors_to_stats_files
+					continue
+				fi
 		fi
 
 		#Onscreen reporting of warning/errors for the current ring
@@ -3732,6 +3845,8 @@ printf "W19\tInvalid ring (contains abnormally low or high density).\n" >> ${tem
 printf "W20\tInvalid sample (contains a high percentage of invalid rings).\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "W21\tThe .dat file is missing the RING NO column.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "W22\tThe .dat file is missing the WOOD TYPE column.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
+printf "W23\tZero-width ring found in .sum file.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
+printf "W24\tThe .dat file is missing some rings.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 
 
 
@@ -3871,11 +3986,13 @@ printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -c \"\copy x_ray_dens_msmts
 #15      2       Ring auto. flagged as the pith (invalid ring) on 2019-07-15 by recalc_Quintek_densitometry_files_20190715.txt, because piths are assumed to be systematically left in the results (parameter first_ring_is_pith=1).     8       TRUE    \N
 cat <(awk -F "\t" '{print $1"_"$2"_A\t"$0"\t8\tTRUE\t\\N"}' /dev/shm/${ts}_pith_rings.txt) <(awk -F "\t" '{print $1"_"$2"_B\t"$0"\t7\tFALSE\tNULL"}' /dev/shm/${ts}_invalid_rings_due_to_extreme_densities.txt)|sort -k1,1|cut -f1 --complement|sort -t $'\t' -k1,1 -k2,2 -u > /dev/shm/${ts}_combined_invalid_rings.txt
 
+#Step 3: add any other invalid ring [Added 2023-03-09]
+cat /dev/shm/${ts}_other_invalid_rings.txt >> /dev/shm/${ts}_combined_invalid_rings.txt
 
 
 
-
-#[20190618] If there are some invalid rings due to extreme density reads, prepare a file to import into invalid_rings
+#Invalid rings: [20190618] If there are some invalid rings due to extreme density reads or pith rings, prepare a file to import into invalid_rings
+#------------------------------------------------------------------------------------------------------------------------------------------------------------
 if [ -s /dev/shm/${ts}_combined_invalid_rings.txt ]
 then
 	
