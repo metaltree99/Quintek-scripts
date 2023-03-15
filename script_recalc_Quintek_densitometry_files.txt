@@ -2,7 +2,7 @@
 #Sébastien Clément
 #Created 5/2/2016
 
-version="20230313"
+version="20230315"
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #General description
@@ -732,6 +732,11 @@ version="20230313"
 #		E4 (.dat files missing some rings) turned into W24, because rng numbers from .dat files are NOT used.
 #		Now removes any trailing spaces/tabs when cleaning the .sum file (line  ~2203) to avoid adding a column inadvertently at the end.
 #		When checking for zero-width rings in .sum file, doesn't look anymore for 0 at both start and end position, but rather if the two are equal, which will also work for zero-width rings of non-zero positions (e.g. start=1.36, end=1.36)
+#
+#	20230315
+#		Minor correction on line ~3347:
+#							Before: printf "${sample_name}\t${ring_no}\t${ring_error_message} Auto-flagged by $0 on ${pgf_date}.\t9\tFALSE\tNULL\n" >> /dev/shm/${ts}_other_invalid_rings.txt
+#							After: printf "${sample_name}\t${ring_no}\t${ring_error_message} Auto-flagged by $0 on ${pgf_date}.\t9\tFALSE\t\\N\n" >> /dev/shm/${ts}_other_invalid_rings.txt
 
 
 #================================================================================================================================================
@@ -3444,7 +3449,7 @@ do
 					#Col 4: 9 = invalid_rings_determination_methods.id 
 					#Col 5: FALSE = invalid_rings.is_pith
 					#Col 6: NULL = invalid_rings.team_id (no team, auto-generated)
-					printf "${sample_name}\t${ring_no}\t${ring_error_message} Auto-flagged by $0 on ${pgf_date}.\t9\tFALSE\tNULL\n" >> /dev/shm/${ts}_other_invalid_rings.txt
+					printf "${sample_name}\t${ring_no}\t${ring_error_message} Auto-flagged by $0 on ${pgf_date}.\t9\tFALSE\t\\N\n" >> /dev/shm/${ts}_other_invalid_rings.txt
 					current_sample_invalid_rings+=1
 				
 				
