@@ -777,7 +777,7 @@ req_files_linux_server="/home/team/shared_scripts/REQs_script_extract_wholesite"
 if [ $(uname -n|grep -i ${linux_server_name}|wc -l) -eq 1 ];
 then 
 	echo "Running from ${linux_server_name}"
-	echo "Will use files in ${req_files_linux_server}/"
+	echo "Will use files in ${req_files_linux_server}/, which are shared with the current script."
 	req_files_folder="${req_files_linux_server}"
 else 
 	echo "NOT running from ${linux_server_name}"
