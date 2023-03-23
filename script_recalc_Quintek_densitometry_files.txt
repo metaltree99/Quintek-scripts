@@ -2,7 +2,7 @@
 #Sébastien Clément
 #Created 5/2/2016
 
-version="20230315"
+version="20230323"
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #General description
@@ -737,11 +737,121 @@ version="20230315"
 #		Minor correction on line ~3347:
 #							Before: printf "${sample_name}\t${ring_no}\t${ring_error_message} Auto-flagged by $0 on ${pgf_date}.\t9\tFALSE\tNULL\n" >> /dev/shm/${ts}_other_invalid_rings.txt
 #							After: printf "${sample_name}\t${ring_no}\t${ring_error_message} Auto-flagged by $0 on ${pgf_date}.\t9\tFALSE\t\\N\n" >> /dev/shm/${ts}_other_invalid_rings.txt
-
+#		Now uses the grep -a option (line ~ 1539) to extract parameters from the .dat file, to avoid the occasionnal "Binary file" returned by grep when it encounters accents.
+#
+#	20230323
+#		Automatically gets the TreeSource team_id for the operator's name in the .dat file, to prepare a ready-to-import comments_on_germplasms.txt file.
+#		Also, for some datasets (e.g. E60A densitometry from 2017 wood cores), observations about cores and missing rings are often put into the "Description" rather than into the "Commentaires" .dat field.
+#			---> the script makes sure to distinguish and save both.
 
 #================================================================================================================================================
 #VARIABLES
 #================================================================================================================================================
+
+#Timestamp to add as a prefix for all temporary files in /dev/shm/, to avoid conflics during concurrent script runs.
+ts=$(date +%Y%m%d%H%M%S)	#e.g. 20190717112047
+
+#Today's date in PostgreSQL format
+pgf_date=$(date +%Y-%m-%d)	#e.g. 2019-07-17
+
+
+#Colors
+red_color="\033[1;31m"
+green_color="\033[1;32m"
+yellow_color="\033[1;33m"
+blue_color="\033[1;34m"
+normal_color="\033[0m"
+
+#Internal field separator (newline)
+IFS='
+'
+
+#[NEW20230316]: check if running from s-que-vdq100156 server.
+#Linux server variables
+db_server_address="132.156.208.78"
+linux_server_name="s-que-vdq100156"	#Name of the Linux server used for running the script
+req_files_linux_server="/home/team/shared_scripts/REQs_script_extract_wholesite" #Location of required files on that server
+
+#Test if running locally or on Linux s-que-vdq100156 server
+#Running from Linux server (note: it is assumed that the /home/seclemen/ folder is NOT accessible, as the current script might be run by anybody.
+if [ $(uname -n|grep -i ${linux_server_name}|wc -l) -eq 1 ];
+then 
+	echo "Running from ${linux_server_name}"
+	echo "Will use files in ${req_files_linux_server}/"
+	req_files_folder="${req_files_linux_server}"
+else 
+	echo "NOT running from ${linux_server_name}"
+	echo "Will use files in current directory"
+	req_files_folder="."
+	
+	#If ./xtraksites132.156.208.78.txt doesn't exist, warn and exit!
+	if [ ! -e ./xtraksites132.156.208.78.txt ]
+	then 
+		printf "${red_color}The required file xtraksites132.156.208.78.txt was NOT FOUND!\nPlease copy it from ${db_server_address}:/home/team/shared_scripts/REQs_script_extract_wholesite/ to the current folder.\nSCRIPT ABORTED${normal_color}\n\n"
+		exit
+	fi
+fi
+
+#[NEW20230316]: Parameters to connect to TreeSource as xtraksites
+	#This will be used to extract and insert codes in observatioon_codes
+	PGPASSWORD=$(cat ${req_files_folder}/xtraksites132.156.208.78.txt)
+	PGHOST=${db_server_address}
+	PGUSER="xtraksites"
+	export PGUSER PGPASSWORD PGHOST
+	database_name="ts_pi"
+
+
+
+
+#Associative array for operator abbreviations in .dat files
+#----------------------------------------------------------------
+#Updated: 3/6/2019
+declare -A operators_abbrev_fullname
+operators_abbrev_fullname=(
+[jeffl]="Jean-François Légaré" 
+[jfl]="Jean-François Légaré" 
+[eduss]="Éric Dussault"
+[foster-francis]="Foster Hart, Francis de Araujo"
+[foster]="Foster Hart"
+[vseigner]="Vincent Seigner"
+[jfleagre]="Jean-François Légaré"
+[jflegare]="Jean-François Légaré"
+[erm]="Edouard Reed-Métayer"
+[ini]="Ioan Nicolae"
+[csimard]="Christine Simard"
+)
+
+
+#[2023-03-16]: Get the team_id's from TreeSource for each operator from the above associative array.
+printf "" > /dev/shm/${ts}_operators_ref_list.txt
+for operators_abbrev in "${!operators_abbrev_fullname[@]}"
+do 
+	op_abbrev=${operators_abbrev}
+	op_fullname=${operators_abbrev_fullname[$operators_abbrev]}
+	#Get team_id from TreeSource
+	op_team_id=$(PGOPTIONS='--client-min-messages=warning' psql -d ${database_name} -A -F "___" -t -c "select fnct_get_team_id_from_employee_names('$(echo ${op_fullname}|iconv -f iso-8859-1 -t utf-8)')" |perl -pe 's/___/\t/g')
+	#Do it also for ts_d to have the same team_id's in case new teams are created above by the function. The output doesn't need to be kept.
+	PGOPTIONS='--client-min-messages=warning' psql -d ts_d -A -F "___" -t -c "select fnct_get_team_id_from_employee_names('$(echo ${op_fullname}|iconv -f iso-8859-1 -t utf-8)')" 1> /dev/null
+
+	#Put that into a file
+	printf "${op_abbrev}\t${op_fullname}\t${op_team_id}\n" >> /dev/shm/${ts}_operators_ref_list.txt
+done
+
+#erm	Edouard Reed-Métayer	124
+#vseigner	Vincent Seigner	118
+#jeffl	Jean-François Légaré	110
+#csimard	Christine Simard	106
+#jfl	Jean-François Légaré	110
+#jfleagre	Jean-François Légaré	110
+#eduss	Éric Dussault	16
+#jflegare	Jean-François Légaré	110
+#foster	Foster Hart	95
+#ini	Ioan Nicolae	140
+#foster-francis	Foster Hart, Francis de Araujo	139
+
+#cat /dev/shm/${ts}_operators_ref_list.txt
+#exit
+
 
 
 #Options:
@@ -877,28 +987,6 @@ extreme_densities_max_pct_allowed=50
 
 	#Note: the same logic, albeit reversed, is applied to the ring closest to pith.
 
-
-
-#Associative array for operators (NEW: 28/11/2018)
-#----------------------------------------------------------------
-#Updated: 3/6/2019
-declare -A operators_abbrev_fullname
-operators_abbrev_fullname=(
-[jeffl]="Jean-François Légaré" 
-[jfl]="Jean-François Légaré" 
-[eduss]="Éric Dussault"
-[foster-francis]="Foster Hart, Francis de Araujo"
-[foster]="Foster Hart"
-[vseigner]="Vincent Seigner"
-[jfleagre]="Jean-François Légaré"
-[jflegare]="Jean-François Légaré"
-[erm]="Edouard Reed-Métayer"
-[ini]="Ioan Nicolae"
-[csimard]="Christine Simard"
-
-)
-
-
 #.dat files parameters
 #----------------------------------------------------------------
 
@@ -947,28 +1035,12 @@ declare -i number_of_reads
 #[20190625] Counter for number of invalid rings flagged per sample
 declare -i current_sample_invalid_rings
 
-#Internal field separator (newline)
-IFS='
-'
 
-#Timestamp to add as a prefix for all temporary files in /dev/shm/, to avoid conflics during cocurrent script runs.
-ts=$(date +%Y%m%d%H%M%S)	#e.g. 20190717112047
-
-#Today's date in PostgreSQL format
-pgf_date=$(date +%Y-%m-%d)	#e.g. 2019-07-17
-
-
-#Colors
-red_color="\033[1;31m"
-green_color="\033[1;32m"
-yellow_color="\033[1;33m"
-blue_color="\033[1;34m"
-normal_color="\033[0m"
 
 #sample counter
 declare -i sample_number=0
 
-#Infiles folder is now specified in a parameter (13/6/2017)
+#Infiles folder
 infiles_folder=$1
 if [ -z $infiles_folder ]
 then
@@ -1057,7 +1129,6 @@ then
 fi
 
 
-
 #Temp folders creation in local folder (/dev/shm not involved)
 #-------------------------------------------------
 #Create a temporary folder
@@ -1071,6 +1142,12 @@ if [ ! -e $temp_f/for_import/ ]; then mkdir $temp_f/for_import/;fi
 if [ ! -e $temp_f/corrected_files/ ]; then mkdir $temp_f/corrected_files/;fi #27/11/2018
 
 date +%Y-%m-%d\ %Hh%Mm%Ss > /dev/shm/${ts}_all_analyses_start_timestamp.txt
+
+
+
+
+
+
 
 #================================================================================================================================================
 #FUNCTIONS
@@ -1391,10 +1468,13 @@ do
 	#If column is operators (NEW: 28/11/2018)
 	if [ "${parameters_to_keep[$parameter]}" == "Operator" ]
 	then
-		#Extract all distinct names
+		#Extract all distinct names from .dat files
 		cut -f2 -d $'\t' /dev/shm/${ts}_dat_parameters_2_cols.txt|tail -n+2|tr '[:upper:]' '[:lower:]'|sort -u > /dev/shm/${ts}_distinct_operators.txt
+		#csimard
+		#jflegare
+		#vseigner
 		
-		#If there are empty names
+		#If there are empty names in .dat files
 		if [ $(perl -pe 's/ //g' /dev/shm/${ts}_distinct_operators.txt|grep '^$'|wc -l) -gt 0 ]
 		then
 			awk -F "\t" '{if ($2 == "" || $2 ~ /^ +$/) print $1}' /dev/shm/${ts}_dat_parameters_2_cols.txt > /dev/shm/${ts}_files_wo_operators.txt
@@ -1407,13 +1487,11 @@ do
 		
 		fi
 		
-		#All operator names found
-		#Generate a reference file from associative array
-		for operators_abbrev in "${!operators_abbrev_fullname[@]}";do printf "${operators_abbrev}\t${operators_abbrev_fullname[$operators_abbrev]}\n";done|sort -k1,1 > /dev/shm/${ts}_operators_ref_list.txt
 		
-		#Check if operators extracted from .dat files are in ref list
+		#Check if operators extracted from .dat files are in refeference list (created at the beginning under the VARIABLES section)
 		#Search for exclusive names from .dat files vs ref list
-		join -t $'\t' -i -v1 /dev/shm/${ts}_distinct_operators.txt /dev/shm/${ts}_operators_ref_list.txt > /dev/shm/${ts}_operators_NOT_in_ref_list.txt
+		#Line before 2023-03-17: join -t $'\t' -i -v1 /dev/shm/${ts}_distinct_operators.txt /dev/shm/${ts}_operators_ref_list.txt > /dev/shm/${ts}_operators_NOT_in_ref_list.txt
+		join -t $'\t' -i -v1 /dev/shm/${ts}_distinct_operators.txt <(sort -k1,1 /dev/shm/${ts}_operators_ref_list.txt) > /dev/shm/${ts}_operators_NOT_in_ref_list.txt
 		
 		#If there are exclusive, warn to add to the array and quit.
 		if [ -s /dev/shm/${ts}_operators_NOT_in_ref_list.txt ]
@@ -1425,12 +1503,20 @@ do
 			exit
 		fi
 		
+		
 		#All were found in ref list of names
 		#Add the full name to the list of columns
-		join -t $'\t' -i <(awk -F "\t" '{print $2"\t"$0}' /dev/shm/${ts}_dat_parameters_2_cols.txt|sort -k1,1) /dev/shm/${ts}_operators_ref_list.txt|cut -f1 -d $'\t' --complement|sort -k1,1|cat <(printf "file\tOperator\tOp_fullname\n") - > /dev/shm/${ts}_dat_parameters_3_cols.txt
+		#Line before 2023-03-17: join -t $'\t' -i <(awk -F "\t" '{print $2"\t"$0}' /dev/shm/${ts}_dat_parameters_2_cols.txt|sort -k1,1) /dev/shm/${ts}_operators_ref_list.txt|cut -f1 -d $'\t' --complement|sort -k1,1|cat <(printf "file\tOperator\tOp_fullname\n") - > /dev/shm/${ts}_dat_parameters_3_cols.txt
+		join -t $'\t' -i <(awk -F "\t" '{print $2"\t"$0}' /dev/shm/${ts}_dat_parameters_2_cols.txt|sort -k1,1) <(sort -k1,1 /dev/shm/${ts}_operators_ref_list.txt)|cut -f1 -d $'\t' --complement|sort -k1,1|cat <(printf "file\tOperator\tOp_fullname\tOp_team_id\n") - > /dev/shm/${ts}_dat_parameters_3_cols.txt
 		mv /dev/shm/${ts}_dat_parameters_3_cols.txt /dev/shm/${ts}_dat_parameters_2_cols.txt
-		#exit
 		
+		#exit
+		#echo
+		#echo "Parameter# $parameter" 
+		#echo "---------------------"
+		#head  /dev/shm/${ts}_dat_parameters_2_cols.txt
+		#cp /dev/shm/${ts}_dat_parameters_2_cols.txt ${temp_f}/operators.txt
+		#exit
 	fi
 
 
@@ -1447,8 +1533,10 @@ do
 		#b. keep header in a separate file
 		grep '^file[[:space:]]' /dev/shm/${ts}_dat_parameters_temp.txt > /dev/shm/${ts}_dat_parameters_temp_header.txt
 		
-		#c. remove header and put in another file
-		grep -v '^file[[:space:]]' /dev/shm/${ts}_dat_parameters_temp.txt > /dev/shm/${ts}_dat_parameters_temp_wo_header.txt
+		#c. remove header and put results in another file
+		#Line before 2023-03-15: grep -v '^file[[:space:]]' /dev/shm/${ts}_dat_parameters_temp.txt > /dev/shm/${ts}_dat_parameters_temp_wo_header.txt
+		#2023-03-15: add -a option to prevent the occasional "Binary file" error from grep when it encounters accents.
+		grep -va '^file[[:space:]]' /dev/shm/${ts}_dat_parameters_temp.txt > /dev/shm/${ts}_dat_parameters_temp_wo_header.txt
 				
 		#b. count max number of columns
 		max_colcount=$(awk -F "\t" '{print NF}' /dev/shm/${ts}_dat_parameters_temp.txt|sort -n|tail -1)
@@ -1456,7 +1544,12 @@ do
 		#c. fill lines (uniformize) having less columns than the max with the appropriate number of tabs
 		awk -v maxcc=${max_colcount} 'BEGIN { FS = OFS = "\t" } { str=""; for (i=1; i<=(maxcc-NF); i++) str=str"\t" }; {print $0 str}' /dev/shm/${ts}_dat_parameters_temp_wo_header.txt > /dev/shm/${ts}_dat_parameters_temp_uc.txt
 		cat /dev/shm/${ts}_dat_parameters_temp_header.txt /dev/shm/${ts}_dat_parameters_temp_uc.txt > /dev/shm/${ts}_dat_parameters.txt
-	
+		
+		#echo
+		#echo "Parameter# $parameter" 
+		#echo "---------------------"
+		#head  /dev/shm/${ts}_dat_parameters.txt
+		
 	fi
 
 
@@ -1465,7 +1558,15 @@ done
 mv /dev/shm/${ts}_dat_parameters.txt ${temp_f}/logs_and_summaries/intermediate/dat_parameters.txt
 printf "done\n"
 
-#exit
+#file	Time/Date of Scan	Date	Sample ID	Study Name	Operator	Op_fullname	Op_team_id	Description	Is pith present	Commentaires	No. pith rings missing	Sample moisture content
+#E60-A-1-002-7-186.dat	26-Jul-2019   14:12:13	2019-07-26	186	E60-A-1-002-7-186	CSIMARD	Christine Simard	106	2012-11 passent pas	Yes		0	8.00
+#E60-A-1-005-4-001.dat	19-Jul-2019   13:51:32	2019-07-19	001	E60-A-1-005-4-001	CSIMARD	Christine Simard	106	2017 passe pas, commence en 2016	Yes		0	8.00
+#E60-A-1-010-2-314.dat	04-Apr-2019   13:28:43	2019-04-04	314	E60-A-1-010-2-314	JFLegare	Jean-François Légaré	110		Yes		0	8.00
+#E60-A-1-010-5-317.dat	04-Apr-2019   15:35:22	2019-04-04	317	E60-A-1-010-5-317	JFLegare	Jean-François Légaré	110		Yes		0	8.00
+#E60-A-1-010-6-604.dat	29-May-2019   13:59:33	2019-05-29	604	E60-A-1-010-6-604	CSIMARD	Christine Simard	106	2017-2015 passent pas, commence en 2014	Yes		0	8.00
+#E60-A-2-003-7-120.dat	24-Jul-2019   18:16:54	2019-07-24	120	E60-A-2-003-7-120	CSIMARD	Christine Simard	106	2011-2006 passent pas, commence en 2005	Yes		0	8.00
+#E60-A-2-006-4-215.dat	14-Sep-2018   16:46:51	2018-09-14	215	E60-A-2-006-4-215	CSIMARD	Christine Simard	106		Yes		0	8.00
+
 
 #Extract distinct values from  parameters (New: 27/11/2018)
 #------------------------------------------------------------------------------------------------------------
@@ -1473,27 +1574,26 @@ printf "Extracting meaningful values from .dat files parameters..."
 
 #List all columns from file (NEW: 28/11/2018)
 head -1 ${temp_f}/logs_and_summaries/intermediate/dat_parameters.txt|perl -pe 's/\t/\n/g'|cat -n > /dev/shm/${ts}_params_columns.txt
-#    1	file
-#    2	Time/Date of Scan
-#     3	Date
-#     4	Sample ID
-#     5	Study Name
-#     6	Operator
-#     7	Op_fullname
-#     8	Description
-#     9	Is pith present
-#    10	Commentaires
-#    11	No. pith rings missing
-#    12	Sample moisture content
+#    1  file
+#     2  Time/Date of Scan
+#     3  Date
+#     4  Sample ID
+#     5  Study Name
+#     6  Operator
+#     7  Op_fullname
+#     8  Op_team_id
+#     9  Description
+#    10  Is pith present
+#    11  Commentaires
+#    12  No. pith rings missing
+#    13  Sample moisture content
+
     
 #Dates (NEW: 28/11/2018)
 sort -u /dev/shm/${ts}_parameters_all_dates.txt > ${temp_f}/logs_and_summaries/intermediate/distinct_scan_dates.txt
 
-#Opérateurs, tous à la chaîne
+#Opérateurs distincts dans les .dat files, mis tous à la chaîne. Sera utilisé pour le rapport final.
 operators=$(perl -pe 's/\n/, /g' /dev/shm/${ts}_distinct_operators.txt|perl -pe 's/, $/\n/g')
-
-
-
 
 
 #Échantillons avec commentaires, statut de moëlle , et nombre de cernes enlevés côté moëlle
@@ -1502,19 +1602,23 @@ operators=$(perl -pe 's/\n/, /g' /dev/shm/${ts}_distinct_operators.txt|perl -pe 
 #Note: filename is always #1
 date_col=$(awk -F "\t" '{if(tolower($2) ~ "^date$") print $1}' /dev/shm/${ts}_params_columns.txt|perl -pe 's/ //g')
 operator_col=$(awk -F "\t" '{if(tolower($2) ~ "op_fullname") print $1}' /dev/shm/${ts}_params_columns.txt|perl -pe 's/ //g')
+#[NEW 2023-03-17]:
+operator_team_id_col=$(awk -F "\t" '{if(tolower($2) ~ "op_team_id") print $1}' /dev/shm/${ts}_params_columns.txt|perl -pe 's/ //g')
 description_col=$(awk -F "\t" '{if(tolower($2) ~ "^description") print $1}' /dev/shm/${ts}_params_columns.txt|perl -pe 's/ //g')
 is_pith_present_col=$(awk -F "\t" '{if(tolower($2) ~ "^is pith present") print $1}' /dev/shm/${ts}_params_columns.txt|perl -pe 's/ //g')
 comments_col=$(awk -F "\t" '{if(tolower($2) ~ "^commentaire") print $1}' /dev/shm/${ts}_params_columns.txt|perl -pe 's/ //g')
 pith_rings_missing_col=$(awk -F "\t" '{if(tolower($2) ~ "^no. pith rings missing") print $1}' /dev/shm/${ts}_params_columns.txt|perl -pe 's/ //g')
 mc_col=$(awk -F "\t" '{if(tolower($2) ~ "^sample moisture") print $1}' /dev/shm/${ts}_params_columns.txt|perl -pe 's/ //g')
 
-#Create a file containing the sample name, the date, operator, is_pith_present, missing_pith_rings, comments
+#Create a file containing the sample name, the date, operator team id, is_pith_present, missing_pith_rings, comments
 #Line before 25/6/2019: awk -F "\t" -v v_date=${date_col} -v v_op=${operator_col} -v v_desc=${description_col} -v v_pith=${is_pith_present_col} -v v_missrings=${pith_rings_missing_col} '{if ($v_desc != "") print $1"\t"$v_date"\t"$v_op"\t"$v_pith"\t"$v_missrings"\t"$v_desc; else print $1"\t"$v_date"\t"$v_op"\t"$v_pith"\t"$v_missrings"\t\\N"}' ${temp_f}/logs_and_summaries/intermediate/dat_parameters.txt|perl -pe 's/\.dat//g' > /dev/shm/${ts}_dat_params_temp.txt
 #[Corrected 25/6/2019]: now includes the "Commentaires" columns, and no longer includes the condition to check for each line if a column is missing, because missing columns are now filled with \t above.
-awk -F "\t" -v v_date=${date_col} -v v_op=${operator_col} -v v_desc=${description_col} -v v_pith=${is_pith_present_col} -v v_comments=${comments_col} -v v_missrings=${pith_rings_missing_col} '{print $1"\t"$v_date"\t"$v_op"\t"$v_pith"\t"$v_missrings"\t"$v_desc"\t"$v_comments}' ${temp_f}/logs_and_summaries/intermediate/dat_parameters.txt|perl -pe 's/\.dat//g' > /dev/shm/${ts}_dat_params_temp.txt
+#Line before 2023-03-17: awk -F "\t" -v v_date=${date_col} -v v_op=${operator_col} -v v_desc=${description_col} -v v_pith=${is_pith_present_col} -v v_comments=${comments_col} -v v_missrings=${pith_rings_missing_col} '{print $1"\t"$v_date"\t"$v_op"\t"$v_pith"\t"$v_missrings"\t"$v_desc"\t"$v_comments}' ${temp_f}/logs_and_summaries/intermediate/dat_parameters.txt|perl -pe 's/\.dat//g' > /dev/shm/${ts}_dat_params_temp.txt
+awk -F "\t" -v v_date=${date_col} -v v_op=${operator_col} -v v_op_ti=${operator_team_id_col} -v v_desc=${description_col} -v v_pith=${is_pith_present_col} -v v_comments=${comments_col} -v v_missrings=${pith_rings_missing_col} '{print $1"\t"$v_date"\t"$v_op"\t"$v_op_ti"\t"$v_pith"\t"$v_missrings"\t"$v_desc"\t"$v_comments}' ${temp_f}/logs_and_summaries/intermediate/dat_parameters.txt|perl -pe 's/\.dat//g' > /dev/shm/${ts}_dat_params_temp.txt
 
-
-
+#for test
+#cp /dev/shm/${ts}_dat_params_temp.txt ${temp_f}/${ts}_dat_params_temp.txt
+#head /dev/shm/${ts}_dat_params_temp.txt
 #exit
 
 #Keep the header
@@ -1522,10 +1626,14 @@ head -1 /dev/shm/${ts}_dat_params_temp.txt > /dev/shm/${ts}_dat_params_temp_head
 
 #Add germplasm_id and data_source_id columns from equivalency list ($eq_list)
 join -t $'\t' <(sort -k1,1 /dev/shm/${ts}_dat_params_temp.txt) <(sort -k1,1 $eq_list)|cat <(paste /dev/shm/${ts}_dat_params_temp_header.txt <(printf "germplasm_id\tdata_source_id\tgrowth_year\tharvested_in_growing_season\n")) - > ${temp_f}/logs_and_summaries/intermediate/samples_info_from_dat_parameters.txt
-#	file	Date	Op_fullname	Is pith present	No. pith rings missing	Description	Commentaires	germplasm_id	data_source_id	growth_year	harvested_in_growing_season
-#	14	2019-01-31	Jean-François Légaré	Yes	0	E560A3 1 169 2 14	Carotte cassee donnees manquantes entre 1994 et 2005	544346	523	2018	t
-#	2	2019-02-18	Jean-François Légaré	Yes	0	E560A3 1 32 4 2		544307	523	2018	t
-#	57	2019-02-05	Jean-François Légaré	Yes	0	E560A3 2 170 4 57	Carotte cassee au mileu entre 2004 et 1996 / le cerne numero 12 a ete supprime car incomplet	544393	523	2018	t
+
+#samples_info_from_dat_parameters.txt
+#file	Date	Op_fullname	Op_team_id	Is pith present	No. pith rings missing	Description	Commentaires	germplasm_id	data_source_id	growth_year	harvested_in_growing_season
+#E60-A-1-002-7-186	2019-07-26	Christine Simard	106	Yes	0	2012-11 passent pas		954371	627	2017	t
+#E60-A-1-005-4-001	2019-07-19	Christine Simard	106	Yes	0	2017 passe pas, commence en 2016		954372	627	2017	t
+
+#exit
+
 
 #Taux d'humidité - en théorie un seul, parfois plusieurs!
 	#a) dans un fichier, arrondi à l'unité  [2019-07-12]
@@ -3684,27 +3792,28 @@ then
 	#[27/11/2018] Join with samples_info_from_dat_parameters.txt from .dat files to create sample_stats_and_comments.txt
 	join -t $'\t' <(sort -k1,1 ${temp_f}/logs_and_summaries/intermediate/all_samples_ring_nos_and_years.txt) <(sort -k1,1 ${temp_f}/logs_and_summaries/intermediate/samples_info_from_dat_parameters.txt) > ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt
 	#sample_stats_and_comments.txt
-	#	14	2	34	1986	2018	2019-01-31		Jean-François Légaré	Yes	0	E560A3 1 169 2 14	Carotte cassee donnees manquantes entre 1994 et 2005							544346	523	2018	t
-	#	2	2	32	1988	2018	2019-02-18	Jean-François Légaré	Yes	0	E560A3 1 32 4 2																		544307	523	2018	t
-	#	57	2	33	1986	2017	2019-02-05	Jean-François Légaré	Yes	0	E560A3 2 170 4 57	Carotte cassee au mileu entre 2004 et 1996 / le cerne numero 12 a ete supprime car incomplet	544393	523	2018	t
+	#E60-A-1-002-7-186	2	29	1983	2010	2019-07-26	Christine Simard	106	Yes	0	2012-11 passent pas		954371	627	2017	t
+	#E60-A-1-005-4-001	2	33	1985	2016	2019-07-19	Christine Simard	106	Yes	0	2017 passe pas, commence en 2016		954372	627	2017	t
 	
 	
 	#[2019-05-29]: add description of fields for sample_stats_and_comments.txt: sample_stats_and_comments_fields.txt
-		printf "1\tSample ID\t.dat (parameters)\tSample ID, extracted from file name.\n"  > ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
+	#Corrected 2023-03-22 to add op_team_id
+		printf "1\tSample name\t.dat (parameters)\tSample ID, extracted from file name.\n"  > ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
 		printf "2\tfirst_ring_no\t.sum\tFirst ring number (pith to bark). Not reliable, rather use first_ring_year.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
 		printf "3\tlast_ring_no\t.sum\tLast ring number (pith to bark). Not reliable, rather use last_ring_year.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
 		printf "4\tfirst_ring_year\t.sum\tFirst ring year (pith to bark).\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
 		printf "5\tlast_ring_year\t.sum\tLast ring year (pith to bark).\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
 		printf "6\tanalysis_date\t.dat (parameters)\tDate formatted from the \"Time/Date of Scan\" parameter.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
 		printf "7\top_fullname\t.dat (parameters)\tOperator full name converted from \"Operator\" parameter.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
-		printf "8\tis_pith_present\t.dat (parameters)\tPresence of pith, obtainted from \"Is pith present\" parameter. DO NOT rely on this parameter, rather look at any comments made on the sample, either on the .dat \"Description\" parameter, or in an Excel file.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
-		printf "9\tno_pith_rings_missing\t.dat (parameters)\tNumber of missing pith rings, from \"No. pith rings missing\" parameter.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
-		printf "10\tdescription\t.dat (parameters)\tDescription from \"Description\" parameter. Usually identifies the sample.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
-		printf "11\tcomments\t.dat (parameters)\tComments from \"Commentaires\" parameter. Comments on the sample.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
-		printf "12\tsample_id\t${eq_list}\tUnique identifier of the sample in TreeSource, coming from the provided equivalency list between sample names in Quintek and germplasm_id's.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
-		printf "13\tdata_source_id\t${eq_list}\tData source id.\n" >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
-		printf "14\tgrowth year\t${eq_list}\tGrowth year at harvest time.\n" >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
-		printf "15\tharv_in_growing_season\t${eq_list}\tWas the sample harvested during growing season?\n" >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
+		printf "8\top_team_id\t.dat (parameters)\tOperator team id converted from \"Operator\" parameter.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
+		printf "9\tis_pith_present\t.dat (parameters)\tPresence of pith, obtainted from \"Is pith present\" parameter. DO NOT rely on this parameter, rather look at any comments made on the sample, either on the .dat \"Description\" parameter, or in an Excel file.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
+		printf "10\tno_pith_rings_missing\t.dat (parameters)\tNumber of missing pith rings, from \"No. pith rings missing\" parameter.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
+		printf "11\tdescription\t.dat (parameters)\tDescription from \"Description\" parameter. Usually identifies the sample.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
+		printf "12\tcomments\t.dat (parameters)\tComments from \"Commentaires\" parameter. Comments on the sample.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
+		printf "13\tsample_id\t${eq_list}\tUnique identifier of the sample in TreeSource, coming from the provided equivalency list between sample names in Quintek and germplasm_id's.\n"  >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
+		printf "14\tdata_source_id\t${eq_list}\tData source id.\n" >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
+		printf "15\tgrowth year\t${eq_list}\tGrowth year at harvest time.\n" >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
+		printf "16\tharv_in_growing_season\t${eq_list}\tWas the sample harvested during growing season?\n" >> ${temp_f}/logs_and_summaries/sample_stats_and_comments_fields.txt
 
 	printf "done.\n"
 	
@@ -3723,7 +3832,8 @@ then
 	#Col 4: comments
 	#Col 5: team_id (set to NULL, because generated by script)
 	#Col 6: flag_date (set to today)
-	awk -F "\t" -v cp1="${comment_p1}" -v cp2="${comment_p2}" -v cp3="${comment_p3}" -v pgfdate="${pgf_date}" '{if ($5 < $14) print $13"\t"$12"\t"$5"\t"cp1 $5 cp2 $14 cp3"\t\\N\t"pgfdate}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt > ${temp_f}/for_import/last_ring_year_in_densitometry_data.txt
+	#Line before 2023-03-22: awk -F "\t" -v cp1="${comment_p1}" -v cp2="${comment_p2}" -v cp3="${comment_p3}" -v pgfdate="${pgf_date}" '{if ($5 < $14) print $13"\t"$12"\t"$5"\t"cp1 $5 cp2 $14 cp3"\t\\N\t"pgfdate}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt > ${temp_f}/for_import/last_ring_year_in_densitometry_data.txt
+	awk -F "\t" -v cp1="${comment_p1}" -v cp2="${comment_p2}" -v cp3="${comment_p3}" -v pgfdate="${pgf_date}" '{if ($5 < $15) print $14"\t"$13"\t"$5"\t"cp1 $5 cp2 $15 cp3"\t\\N\t"pgfdate}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt > ${temp_f}/for_import/last_ring_year_in_densitometry_data.txt
 	#523     544343  2017    Automatically added on 2019-07-15 by -bash because last ring year in .sum file (2017) is lower than expected year from harvest date (2018).     \N    2019-07-15
 	#523     544394  2017    Automatically added on 2019-07-15 by -bash because last ring year in .sum file (2017) is lower than expected year from harvest date (2018).     \N    2019-07-15
 	#523     544324  2017    Automatically added on 2019-07-15 by -bash because last ring year in .sum file (2017) is lower than expected year from harvest date (2018).     \N    2019-07-15
@@ -3734,7 +3844,9 @@ then
 	then
 		echo
 		printf "\tThere are samples where the last ring year differs from the expected last ring year:\n"
-		cat <(printf "${yellow_color}sample_name\tsample_id\tlast_ring_year_sum\tlast_ring_year_expected\n") <(awk -F "\t" '{if ($5 < $14) print $1"\t"$12"\t"$5"\t"$14}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt)|perl -pe 's/^/\t\t/g'
+		#Line before 2023-03-22: cat <(printf "${yellow_color}sample_name\tsample_id\tlast_ring_year_sum\tlast_ring_year_expected\n") <(awk -F "\t" '{if ($5 < $14) print $1"\t"$12"\t"$5"\t"$14}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt)|perl -pe 's/^/\t\t/g'
+		cat <(printf "${yellow_color}sample_name\tsample_id\tlast_ring_year_sum\tlast_ring_year_expected\n") <(awk -F "\t" '{if ($5 < $15) print $1"\t"$13"\t"$5"\t"$15}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt)|perl -pe 's/^/\t\t/g'
+		
 		printf "${normal_color}"
 		printf "\t\t- Most of the time, this indicates that some rings are missing at bark side, possibly because of a broken core.\n"
 		printf "\t\t- A file has been created to import those last rings into last_ring_year_in_densitometry_data.\n"
@@ -3745,7 +3857,8 @@ then
 	
 	#[20190627]: E9 : last ring year in data is newer (problem!) than expected year from harvest date
 	#NOTE: this could be checked much earlier in the script using the provided ${eq_list} and raw .sum files.
-	awk -F "\t" '{if ($5 > $14) print $1"\t"$12"\t"$3"\t"$5"\t"$14}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt > ${temp_f}/logs_and_summaries/intermediate/last_ring_year_in_data_newer_than_harvest_year.txt
+	#Line before 2023-03-22: awk -F "\t" '{if ($5 > $14) print $1"\t"$12"\t"$3"\t"$5"\t"$14}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt > ${temp_f}/logs_and_summaries/intermediate/last_ring_year_in_data_newer_than_harvest_year.txt
+	awk -F "\t" '{if ($5 > $15) print $1"\t"$13"\t"$3"\t"$5"\t"$15}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt > ${temp_f}/logs_and_summaries/intermediate/last_ring_year_in_data_newer_than_harvest_year.txt
 	
 	if [ -s ${temp_f}/logs_and_summaries/intermediate/last_ring_year_in_data_newer_than_harvest_year.txt ]
 	then
@@ -3778,7 +3891,8 @@ then
 	printf "Automatically flagging the last ring as incomplete if sample was harvested during growing season and last ring year in .sum is as expected by harvest date..."
 
 	#Get the samples where last ring year in .sum = last ring expected year, and harvest has been made during growing season
-	awk -F "\t" '{if ($5 == $14 && $15 == "t") print $12"\t"$3"\t"$13"\t"$5"\t"$14"\t"$15}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt > ${temp_f}/logs_and_summaries/intermediate/samples_with_incomplete_last_ring.txt
+	#Line before 2023-03-22: awk -F "\t" '{if ($5 == $14 && $15 == "t") print $12"\t"$3"\t"$13"\t"$5"\t"$14"\t"$15}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt > ${temp_f}/logs_and_summaries/intermediate/samples_with_incomplete_last_ring.txt
+	awk -F "\t" '{if ($5 == $15 && $16 == "t") print $13"\t"$3"\t"$14"\t"$5"\t"$15"\t"$16}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt > ${temp_f}/logs_and_summaries/intermediate/samples_with_incomplete_last_ring.txt
 	#	544346  34      523     2018    2018    t
 	#	544307  32      523     2018    2018    t
 	#
@@ -4050,35 +4164,79 @@ fi
 
 
 
-#Comments from .dat parameters
+#Comments and descriptions from .dat parameters
 #-----------------------------------------------------------------------------------------
-#If there are comments in sample_stats_and_comments.txt
-comment_lines_count=$(cut -f11 -d $'\t' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt|sort -u|grep -v '^$'|wc -l)
-if [ ${comment_lines_count} -gt 0 ]
+#2023-03-23: Descriptions also kept, as E60A cores for 2017 had most densitometry observations on missing rings put in .dat descriptions rather than in .dat comments.
+#If there are comments and descriptions in sample_stats_and_comments.txt
+
+#${temp_f}/logs_and_summaries/sample_stats_and_comments.txt
+#E60-A-1-002-7-186	2	29	1983	2010	2019-07-26	Christine Simard	106	Yes	0	2012-11 passent pas		954371	627	2017	t
+#E60-A-1-005-4-001	2	33	1985	2016	2019-07-19	Christine Simard	106	Yes	0	2017 passe pas, commence en 2016		954372	627	2017	t
+
+#Col 1: sample name
+#Col 2: first ring no
+#Col 3: last ring no
+#Col 4: first ring year
+#Col 5: last ring year
+#Col 6: analysis date
+#Col 7: Operator full name
+#Col 8:  operator team id
+#Col 9: Is the pith present?
+#Col 10: Number of pith rings missing
+#Col 11: Description in .dat
+#Col 12: Comments in .dat
+#Col 13: Sample Id (TreeSource)
+#Col 14: data_source_id
+#Col 15: Growth year
+#Col 16: Was the sample harvested during growing season ?
+
+#[NEW 2023-03-23]:
+description_lines_count=$(cut -f11 -d $'\t' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt|sort -u|grep -v '^$'|wc -l)
+comment_lines_count=$(cut -f12 -d $'\t' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt|sort -u|grep -v '^$'|wc -l)
+
+
+#2023-03-23
+#If either descriptions or comments are present in .dat files
+if [ ${description_lines_count} -gt 0 ] || [ ${comment_lines_count} -gt 0 ]
 then
-	#Create the file. Now converts in UTF-8 format [2019-07-17]
-	awk -F "\t" '{if ($11 != "") print $12"\t"$6"\tFALSE\t"$11"\tDensitométrie\t"$13"\tFALSE\t"$7}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt|iconv -f iso-8859-1 -t utf-8 > ${temp_f}/for_import/comments_on_germplasms_utf.txt
+	
+	#Create the file for import
+	printf "" > ${temp_f}/for_import/comments_on_germplasms.txt
+	
+	#If there are descriptions from .dat
+	if [ ${description_lines_count} -gt 0 ]
+	then
+		#Create the file. Now converts in UTF-8 format [2019-07-17]
+		#Note: "9" is for contexts_for_comments_on_germplasms.id=9 ---> context='Densitométrie'
+		awk -F "\t" '{if ($11 != "") print $13"\t"$6"\tFALSE\t"$11" (from .dat description)\t9\t"$14"\tFALSE\t"$8}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt|iconv -f iso-8859-1 -t utf-8 > ${temp_f}/logs_and_summaries/intermediate/comments_on_germplasms_from_dat_descriptions_utf.txt
+	
+		#Add to comments_on_germplasms.txt file
+		cat ${temp_f}/logs_and_summaries/intermediate/comments_on_germplasms_from_dat_descriptions_utf.txt >> ${temp_f}/for_import/comments_on_germplasms.txt
+		#head ${temp_f}/logs_and_summaries/intermediate/comments_on_germplasms_from_dat_descriptions_utf.txt
+	
+	fi
+
+	if [ ${comment_lines_count} -gt 0 ]
+	then
+		#Create the file. Now converts in UTF-8 format [2019-07-17]
+		awk -F "\t" '{if ($12 != "") print $13"\t"$6"\tFALSE\t"$12" (from .dat comment)\t9\t"$14"\tFALSE\t"$8}' ${temp_f}/logs_and_summaries/sample_stats_and_comments.txt|iconv -f iso-8859-1 -t utf-8 > ${temp_f}/logs_and_summaries/intermediate/comments_on_germplasms_from_dat_comments_utf.txt
+		
+		#Add to comments_on_germplasms.txt file
+		#Note: "9" is for contexts_for_comments_on_germplasms.id=9 ---> context='Densitométrie'
+		cat ${temp_f}/logs_and_summaries/intermediate/comments_on_germplasms_from_dat_comments_utf.txt >> ${temp_f}/for_import/comments_on_germplasms.txt
+		#head ${temp_f}/logs_and_summaries/intermediate/comments_on_germplasms_from_dat_comments_utf.txt
+	fi
+
+
 	echo
-	printf "${green_color}\tComments on samples from .dat file:\n"
-	printf "\t\tcomments_on_germplasms_utf.txt\n\t\tNOTE: import in a temporary table as team members are listed in full, and have to be converted to team_id using fnct_get_team_id_from_employee_names()\n"
-	printf "\t\tCREATE TABLE temp_density_comments_${ts} (germplasm_id INT,date DATE,date_is_approximate BOOLEAN,comment TEXT,context TEXT,data_source_id INT,action_required BOOLEAN,team_employees TEXT);\n"
-	printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -c \"\copy temp_density_comments_${ts} FROM 'comments_on_germplasms_utf.txt'\"\n"
-	printf "\t\tALTER TABLE temp_density_comments_${ts} ADD COLUMN team_id INT;\n"
-	printf "\t\tUPDATE temp_density_comments_${ts} SET team_id=fnct_get_team_id_from_employee_names(team_employees);\n"
-	printf "\t\tINSERT INTO comments_on_germplasms(germplasm_id,date,date_is_approximate,comment,context,data_source_id,action_required,team_id)\n"
-	printf "\t\t\tSELECT germplasm_id,date,date_is_approximate,comment,context,data_source_id,action_required,team_id\n"
-	printf "\t\t\tFROM temp_density_comments_${ts};\n"
-	printf "\t\tDROP TABLE temp_density_comments_${ts};\n"
-	printf "\tNOTE: team_id could be obtained from TreeSource by the script instead of doing all that fastidious work in the DB...\n${normal_color}"
+	printf "${green_color}\tComments and description on samples from .dat files:\n"
+	printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -c \"\copy comments_on_germplasms (germplasm_id, date, date_is_approximate, comment, context_id, data_source_id, action_required, team_id) FROM 'comments_on_germplasms.txt'\"\n"
+	echo
 
 fi
 
-#Ways to improve this:
-#team_id=$(psql -U cleseb -h 132.156.208.30 -d ts_d -A -t -c "SELECT fnct_get_team_id_from_employee_names('Jean-François Légaré')")
-#	But: must define the PostgreSQL environment variables: PGHOST, PGDATABASE, PGUSER, etc.
-#
-#
-#
+
+
 
 
 #last_ring_year_in_densitometry_data
@@ -4089,8 +4247,9 @@ then
 	printf "${green_color}\tSamples where last ring year differs than that expected from harvest date:\n"
 	
 	printf "\t\tALTER TABLE last_ring_year_in_densitometry_data DISABLE TRIGGER trg_last_ring_year_in_densitometry_data_01;\n"
-	printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -c \"\copy last_ring_year_in_densitometry_data FROM 'last_ring_year_in_densitometry_data.txt'\"\n${normal_color}"
-	printf "\t\tALTER TABLE last_ring_year_in_densitometry_data ENABLE TRIGGER trg_last_ring_year_in_densitometry_data_01;\n"
+	printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -c \"\copy last_ring_year_in_densitometry_data FROM 'last_ring_year_in_densitometry_data.txt'\"\n"
+	printf "\t\tALTER TABLE last_ring_year_in_densitometry_data ENABLE TRIGGER trg_last_ring_year_in_densitometry_data_01;\n${normal_color}"
+	echo
 fi
 
 #phys_msmt_experiments
@@ -4125,8 +4284,6 @@ rm ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 printf "UPDATE phys_msmt_experiments\nSET\n" > ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 printf "\tsamples_analyzed=${number_of_dat_sum_files},\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt	#Computed above
-#Get a variable containing all operator fullnames separated by a comma
-all_distinct_operators=$(cut -f3 -d $'\t' ${temp_f}/logs_and_summaries/intermediate/samples_info_from_dat_parameters.txt|tail -n+2|sort -u|perl -pe 's/\n/, /g'|perl -pe 's/, $/\n/g')
 printf "\tteam_id=fnct_get_team_id_from_employee_names('${all_distinct_operators}'),\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 printf "\tmsmt_date='$(tail -1 ${temp_f}/logs_and_summaries/intermediate/distinct_scan_dates.txt)',\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt	#Get the latest date from distinct_scan_dates.txt
 printf "\tdensity_type=1,\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
