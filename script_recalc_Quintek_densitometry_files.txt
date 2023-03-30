@@ -2,7 +2,7 @@
 #Sébastien Clément
 #Created 5/2/2016
 
-version="20230323"
+version="20230330"
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #General description
@@ -743,7 +743,12 @@ version="20230323"
 #		Automatically gets the TreeSource team_id for the operator's name in the .dat file, to prepare a ready-to-import comments_on_germplasms.txt file.
 #		Also, for some datasets (e.g. E60A densitometry from 2017 wood cores), observations about cores and missing rings are often put into the "Description" rather than into the "Commentaires" .dat field.
 #			---> the script makes sure to distinguish and save both.
-
+#
+#	20230330
+#		Corrections to the SQL_INSERT_INTO_phys_msmt_experiments_utf.txt and SQL_UPDATE_phys_msmt_experiments_utf.txt files to include:
+#		- The version (date) of the script
+#		- The tring_dating_method_id (set by default to 999)
+#		
 #================================================================================================================================================
 #VARIABLES
 #================================================================================================================================================
@@ -4259,7 +4264,7 @@ all_distinct_operators=$(cut -f3 -d $'\t' ${temp_f}/logs_and_summaries/intermedi
 
 #INSERT INTO
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
-printf "INSERT INTO phys_msmt_experiments (data_source_id, samples_analyzed, team_id, msmt_date, density_type, density_is_basic_specific_gravity, msmts_mc, technology, date_data_added, table_where_data_put, ew_lw_treshold_method, script_version, script_parameters)\n" > ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
+printf "INSERT INTO phys_msmt_experiments (data_source_id, samples_analyzed, team_id, msmt_date, density_type, density_is_basic_specific_gravity, msmts_mc, technology, date_data_added, table_where_data_put, ew_lw_treshold_method, script_version, script_parameters,	ring_dating_method_id)\n" > ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf "VALUES (\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf "\t${data_source_id},\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf "\t${number_of_dat_sum_files},\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt	#Computed above
@@ -4272,8 +4277,9 @@ printf "\t'Quintek',\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experi
 printf "\t'${pgf_date}',\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf "\t'x_ray_dens_msmts_per_read',\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf "\t'$(if [ $ewlw_transition_method -eq 1 ];then printf "Mid-range density"; else printf "Median density";fi)',\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
-printf "\t'${0}',\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
-printf "\t'first_ring_is_pith=${first_ring_is_pith}, ewlw_transition_method=${ewlw_transition_method}, multiple_transitions_option=${multiple_transitions_option}, low_density_reads_removal_choice=${low_density_reads_removal_choice}, step=${step}, min_reads_per_ring_dat=${min_reads_per_ring_dat}, min_reads_for_transition=${min_reads_for_transition}, min_ew_proportion=${min_ew_proportion}, max_ring_width_factor=${max_ring_width_factor}, max_pct_invalid_rings_for_invalid_sample=${max_pct_invalid_rings_for_invalid_sample}, min_allowed_density=${min_allowed_density}, max_allowed_density=${max_allowed_density}, extreme_densities_max_pct_allowed=${extreme_densities_max_pct_allowed}, reads_to_check_for_density_pithside=${reads_to_check_for_density_pithside}, reads_to_check_for_density_barkside=${reads_to_check_for_density_barkside}, lowest_density_threshold=${lowest_density_threshold}, highest_density_threshold=${highest_density_threshold}, varying_threshold_step=${varying_threshold_step}.'\n"  >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
+printf "\t'${0} (${version})',\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
+printf "\t'first_ring_is_pith=${first_ring_is_pith}, ewlw_transition_method=${ewlw_transition_method}, multiple_transitions_option=${multiple_transitions_option}, low_density_reads_removal_choice=${low_density_reads_removal_choice}, step=${step}, min_reads_per_ring_dat=${min_reads_per_ring_dat}, min_reads_for_transition=${min_reads_for_transition}, min_ew_proportion=${min_ew_proportion}, max_ring_width_factor=${max_ring_width_factor}, max_pct_invalid_rings_for_invalid_sample=${max_pct_invalid_rings_for_invalid_sample}, min_allowed_density=${min_allowed_density}, max_allowed_density=${max_allowed_density}, extreme_densities_max_pct_allowed=${extreme_densities_max_pct_allowed}, reads_to_check_for_density_pithside=${reads_to_check_for_density_pithside}, reads_to_check_for_density_barkside=${reads_to_check_for_density_barkside}, lowest_density_threshold=${lowest_density_threshold}, highest_density_threshold=${highest_density_threshold}, varying_threshold_step=${varying_threshold_step}.',\n"  >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
+printf "\t'999'\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf ")\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf ";\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 
@@ -4293,8 +4299,9 @@ printf "\ttechnology='Quintek',\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_
 printf "\tdate_data_added='${pgf_date}',\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 printf "\ttable_where_data_put='x_ray_dens_msmts_per_read',\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 printf "\tew_lw_treshold_method='$(if [ $ewlw_transition_method -eq 1 ];then printf "Mid-range density"; else printf "Median density";fi)',\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
-printf "\tscript_version='${0}',\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
-printf "\tscript_parameters='first_ring_is_pith=${first_ring_is_pith}, ewlw_transition_method=${ewlw_transition_method}, multiple_transitions_option=${multiple_transitions_option}, low_density_reads_removal_choice=${low_density_reads_removal_choice}, step=${step}, min_reads_per_ring_dat=${min_reads_per_ring_dat}, min_reads_for_transition=${min_reads_for_transition}, min_ew_proportion=${min_ew_proportion}, max_ring_width_factor=${max_ring_width_factor}, max_pct_invalid_rings_for_invalid_sample=${max_pct_invalid_rings_for_invalid_sample}, min_allowed_density=${min_allowed_density}, max_allowed_density=${max_allowed_density}, extreme_densities_max_pct_allowed=${extreme_densities_max_pct_allowed}, reads_to_check_for_density_pithside=${reads_to_check_for_density_pithside}, reads_to_check_for_density_barkside=${reads_to_check_for_density_barkside}, lowest_density_threshold=${lowest_density_threshold}, highest_density_threshold=${highest_density_threshold}, varying_threshold_step=${varying_threshold_step}.'\n"  >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
+printf "\tscript_version='${0} (${version})',\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
+printf "\tscript_parameters='first_ring_is_pith=${first_ring_is_pith}, ewlw_transition_method=${ewlw_transition_method}, multiple_transitions_option=${multiple_transitions_option}, low_density_reads_removal_choice=${low_density_reads_removal_choice}, step=${step}, min_reads_per_ring_dat=${min_reads_per_ring_dat}, min_reads_for_transition=${min_reads_for_transition}, min_ew_proportion=${min_ew_proportion}, max_ring_width_factor=${max_ring_width_factor}, max_pct_invalid_rings_for_invalid_sample=${max_pct_invalid_rings_for_invalid_sample}, min_allowed_density=${min_allowed_density}, max_allowed_density=${max_allowed_density}, extreme_densities_max_pct_allowed=${extreme_densities_max_pct_allowed}, reads_to_check_for_density_pithside=${reads_to_check_for_density_pithside}, reads_to_check_for_density_barkside=${reads_to_check_for_density_barkside}, lowest_density_threshold=${lowest_density_threshold}, highest_density_threshold=${highest_density_threshold}, varying_threshold_step=${varying_threshold_step}.',\n"  >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
+printf "\tring_dating_method_id=999'\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 printf "WHERE data_source_id=${data_source_id}\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt #data_source_id from the $eq_list file
 printf ";\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 
@@ -4304,7 +4311,8 @@ rm ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 
 printf "${green_color}\tDetails on the dataset:\n"
 printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -f \"SQL_INSERT_INTO_phys_msmt_experiments_utf.txt\"\n"
-printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -f \"SQL_UPDATE_phys_msmt_experiments_utf.txt\"\n${normal_color}"
+printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -f \"SQL_UPDATE_phys_msmt_experiments_utf.txt\"\n"
+printf "\tNote: replace the ring_dating_method_id value (set by default to 999) with the appropriate one.\n${normal_color}"
 
 
 
