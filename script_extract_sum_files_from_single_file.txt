@@ -1,0 +1,184 @@
+#!/bin/bash
+#20/9/2017
+#For Quintek data, script to extract individual .sum files (1 per sample) from a single file containing all samples.
+#The resulting .sum files are then ready to be used by script_recalc_Quintek_densitometry_files.txt
+#
+version="2023-05-17"
+
+
+#Usage
+#------------------------------
+#script_extract_sum_files_from_single_file.txt file
+#Where:
+#	file: file containing sum files combined for all samples.
+#		Note: that file is a text file often exported from Excel.
+
+
+#Example of infile: 1 file for all samples
+#"\\s-que-dfs\dfs\Services_Projets\Projets chercheurs\P.Lenz\Acadia188A\Densito\Acadia188A_SUM.xlsx"
+#---------------------------------
+#Sample ID	Ring No.	Year	End mm	Start mm	Late Wood Width mm	Ring Width mm	Late Wood Percent	Early Wood Density	Late Wood Density	Ring Average Density
+#B10R10C27	25	2020	2.64	3.54	0.14	0.9	15.56	300.04	451.07	323.53
+#B10R10C27	24	2019	3.54	4.72	0.32	1.18	27.12	325.67	605.35	402.83
+#B10R10C27	23	2018	4.72	5.76	0.34	1.04	32.69	307.19	655.16	418.8
+#(...)
+#B9R8C7	5	2003	34.86	38.38	1.02	3.52	28.98	364.86	607.23	435.09
+#B9R8C7	4	2002	38.38	42.2	0.94	3.82	24.61	392.59	548.04	430.84
+#B9R8C7	3	2001	42.2	46.56	4.36	4.36	100	0	530.27	530.27
+#(...22277)
+
+#Example of outfile (1 file per sample)
+#---------------------------
+#Sample ID	Ring No.	Year	End mm	Start mm	Late Wood Width mm	Ring Width mm	Late Wood Percent	Early Wood Density	Late Wood Density	Ring Average Density
+#B10R1C10	24	2019	3.6	4.54	0.6	0.94	63.83	398.58	531.21	483.24
+#B10R1C10	23	2018	4.54	4.9	0.36	0.36	100	0	487.08	487.08
+#B10R1C10	22	2017	4.9	5.4	0.5	0.5	100	0	513.33	513.33
+#B10R1C10	21	2016	5.4	6.02	0.5	0.62	80.65	408.41	585.62	551.32
+#B10R1C10	20	2015	6.02	7.22	0.46	1.2	38.33	316.76	568.48	413.25
+#B10R1C10	19	2014	7.22	9.74	1.38	2.52	54.76	399.4	554.99	484.61
+#B10R1C10	18	2013	9.74	12.22	2.46	2.48	99.19	430.69	548.99	548.04
+#B10R1C10	17	2012	12.22	15.24	1.94	3.02	64.24	360	647.06	544.4
+#B10R1C10	16	2011	15.24	18.46	2	3.22	62.11	364.21	638.12	534.34
+#B10R1C10	15	2010	18.46	22.02	1.52	3.56	42.7	341.12	578.27	442.37
+#B10R1C10	14	2009	22.02	25.46	1	3.44	29.07	352.12	613.21	428.02
+#B10R1C10	13	2008	25.46	29.16	0.9	3.7	24.32	316.77	586.42	382.36
+#B10R1C10	12	2007	29.16	33.16	1.04	4	26	340.06	539.86	392
+#B10R1C10	11	2006	33.16	36.5	0.58	3.34	17.37	334.12	585.11	377.7
+#B10R1C10	10	2005	36.5	40.16	0.44	3.66	12.02	335.79	629.8	371.13
+#B10R1C10	9	2004	40.16	43.12	0.68	2.96	22.97	342.28	571.5	394.93
+#B10R1C10	8	2003	43.12	46.38	0.42	3.26	12.88	337.11	615.71	373.01
+#B10R1C10	7	2002	46.38	49.68	0.44	3.3	13.33	341.66	650.4	382.82
+#B10R1C10	6	2001	49.68	52.58	0.58	2.9	20	369.1	566.81	408.65
+#B10R1C10	5	2000	52.58	55.04	0.66	2.46	26.83	367.03	554.78	417.4
+#B10R1C10	4	1999	55.04	56.22	1.12	1.18	94.92	426.28	477.95	475.32
+#B10R1C10	3	1998	56.22	59.66	3.12	3.44	90.7	427.39	493.93	487.74
+#(23)
+
+
+
+
+#Modifications
+#----------------------------------------------------
+#2023-05-17
+#	Now infile is a parameter
+#	The outfolder is prefixed with a timastamp
+#	Temporary files are also prefixed with a timestamped and put into /dev/shm/
+#	Performs several checks:
+#		- infile specified and if yes, exits
+#		- even column numbers
+#		- presence of a header
+#	Header for sample name is specified in a variable, and this header column and row number is found
+
+
+#Variables definition
+#-----------------------------------------------------
+#Timestamp to add as a prefix for all temporary files.
+ts=$(date +%Y%m%d%H%M%S)	#e.g. 20190717112047
+
+outfolder=out_new_sum_${ts}
+IFS='
+'
+
+red_color="\033[1;31m"
+green_color="\033[1;32m"
+yellow_color="\033[1;33m"
+blue_color="\033[1;34m"
+normal_color="\033[0m"
+
+first_col_header="Sample ID"
+
+
+declare -i counter=1
+
+#Parameters validation
+#-----------------------------------------------------
+
+infile=$1
+if [ -z $infile ]
+then
+	printf "${red_color}Missing file to treat!\n"
+	printf "ABORTING${normal_color}\n"
+	exit
+else
+	if [ ! -e $infile ]
+	then
+		printf "${red_color}File named '$infile' does not exist!\n"
+		printf "ABORTING${normal_color}\n"
+		exit
+	fi
+fi
+
+
+
+#Main program
+#-----------------------------------------------------
+echo "------------------------------------------------------------------------------------------------"
+echo "Script $0, version $version"
+echo "Run on $(date +%Y%m%d%H%M%S)"
+echo "------------------------------------------------------------------------------------------------"
+
+#Create outfiles folder
+mkdir ${outfolder}
+
+#convert to Unix
+dos2unix $infile
+
+#Check for irregular columns count
+awk -F "\t" '{print NF}' $infile|sort|uniq -c > /dev/shm/${ts}_distinct_columns_count.txt
+
+if [ $(cat /dev/shm/${ts}_distinct_columns_count.txt|wc -l) -gt 1 ]
+then
+	printf "${red_color}The number of columns in ${infile} is irregular:\n"
+	cat /dev/shm/${ts}_distinct_columns_count.txt|perl -pe 's/^/\t/g'
+	printf "Please correct the file and restart.\n"
+	printf "ABORTING${normal_color}\n"
+	exit
+fi
+
+#Check for the presence of the first column header
+cat -n ${infile}|grep -i "${first_col_header}"  > /dev/shm/${ts}_infile_header_w_line_no.txt
+
+if [ $(cat /dev/shm/${ts}_infile_header_w_line_no.txt|wc -l) -eq 0 ]
+then
+	printf "${red_color}The header, ${first_col_header}, could not be found in the file ${infile}!\n"
+	printf "Please correct the file and restart.\n"
+	printf "ABORTING${normal_color}\n"
+	exit
+fi
+
+#Get header line number
+header_line_no=$(cut -f1 -d $'\t' /dev/shm/${ts}_infile_header_w_line_no.txt|perl -pe 's/ //g')
+
+#Get header line into a file
+cut -f1 -d $'\t' --complement /dev/shm/${ts}_infile_header_w_line_no.txt > /dev/shm/${ts}_infile_header.txt
+
+#Get header column number
+header_col_no=$(perl -pe 's/\t/\n/g' /dev/shm/${ts}_infile_header.txt|cat -n|grep -i "${first_col_header}"|cut -f1 -d $'\t'|perl -pe 's/ //g')
+
+#echo "Header line no: ${header_line_no}, header column no: ${header_col_no}"
+
+#Get the first row of data line number
+let data_1st_line_no=${header_line_no}+1
+
+#echo $data_1st_line_no
+
+
+#Cycle through all sample names and extract corresponding lines into a file
+for sample_name in $(cut -f${header_col_no} -d $'\t' ${infile}|tail -n+${data_1st_line_no}|sort -u|grep -v '^$')
+do
+	echo $counter: $sample_name
+	
+	#Extract all rows for current sample into a file, and add the header.
+	awk -F "\t" -v sn=${sample_name} -v hcn=${header_col_no} '{if ($hcn == sn) print}' ${infile}|cat /dev/shm/${ts}_infile_header.txt -  > ./${outfolder}/${sample_name}.sum
+
+	#if [ ${counter} -eq 5 ]; then break; fi #for debug only
+
+	counter+=1
+
+done
+
+#Remove temporaty files
+rm /dev/shm/${ts}_*
+
+
+exit
