@@ -2,7 +2,7 @@
 #Sébastien Clément
 #Created 5/2/2016
 
-version="20230330"
+version="20230707"
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #General description
@@ -154,6 +154,7 @@ version="20230330"
 		#	DO NOT remove rows from the .sum file, unless they represent extra rings after the pith, when the full radius has been scanned up to pith center.
 
 #[sample_name_eq_list]
+	#Note: il ne DOIT PAS y avoir d'entêtes.
 	#e560a3_eqtable_dendrono_sampleid_dsi_gy_higs.txt
 		#	1	544353	523	2018	t
 		#	2	544307	523	2018	t
@@ -749,6 +750,25 @@ version="20230330"
 #		- The version (date) of the script
 #		- The tring_dating_method_id (set by default to 999)
 #		
+#	20230628
+#		Now calculates the number of .dat, .sum and .dat files without operators: dat_files_count, sum_files_count, files_wo_op_count
+#		Also gets the list of operators in order of frequency: /dev/shm/${ts}_operators_most2least_freq.txt
+#		...and now caculates distinct operators (/dev/shm/${ts}_distinct_operators.txt) from that list
+#		Also makes the distinction between a few vs all .dat files without operators.
+
+
+#	20230705
+#		Added sl and mno to list of operators.
+#		When auto-determining which column is the position in .dat files ("Clean the .dat file" section), the required formats are no longer both 0.000 AND 00.000, but can be either one, as some .dat files start at positions higher than 10.000 (see: B7R12C11.dat and B7R6C17.dat files in U:\Services_Projets\Projets chercheurs\P.Lenz\Acadia188A\Densito\)
+
+#	20230707
+#		Ring dating method is not specified in a variable, to prepare the SQL_INSERT_INTO_phys_msmt_experiments_utf.txt file
+#			(field phys_msmt_experiments.ring_dating_method_id)
+#		SQL_INSERT_INTO_phys_msmt_experiments_utf.txt file is no longer produced, as it seems the iso-8859-1 file, SQL_INSERT_INTO_phys_msmt_experiments.txt, is the one that works with accents...
+#
+#
+
+#
 #================================================================================================================================================
 #VARIABLES
 #================================================================================================================================================
@@ -824,6 +844,9 @@ operators_abbrev_fullname=(
 [erm]="Edouard Reed-Métayer"
 [ini]="Ioan Nicolae"
 [csimard]="Christine Simard"
+[mno]="Maxim Nolan"
+[sl]="Samuel Lapierre"
+
 )
 
 
@@ -861,6 +884,25 @@ done
 
 #Options:
 #-------------------------------------------------
+#[NEW 20230707]
+#Ring dating method
+#This corresponds to the methodes in the ring_dating_methods table, used by phys_msmt_experiments.ring_dating_method_id
+ring_dating_method=1
+#1	Dendro ---> Densito (most frequent method in datasets after 2019)
+#		CASE 1: Ring years from densitometry results validated with dendrochronology results.
+#		- Ring years in densitometry corrected with dendrochronology.
+#		- When rings were absent for that sample in dendrochronology, but present in the master chronology, they were also set as zero-width rings in densitometry for that sample.
+#		- Years for both analyses (dendrochronology and densitometry) are valid, and joining both data types by year is possible.
+#		- However, last (most recent) ring is not always the same in both methods, as some of the last rings cannot always be detected by densitometry.
+
+#2	Dendro -X-> Densito
+#		CASE 2: Dendrochronolgy done, but not used to validate densitometry ring years.
+#		- Rings are dated independently for each method, no link possible between the results.
+
+#3	Densito only
+#		CASE 3: Densitometry results only, NO dendrochronology.
+
+
 #Variable to systematically consider all first rings as piths [20190711] 
 first_ring_is_pith=0	#0=no, 1=yes
 
@@ -1299,6 +1341,13 @@ ls -1 ./${infiles_folder}|grep '\.dat$' > /dev/shm/${ts}_dat_files.txt
 ls -1 ./${infiles_folder}|grep '\.sum$' > /dev/shm/${ts}_sum_files.txt
 printf "done.\n"
 
+#List .dat/.sum files in specified directory.
+#------------------------------------------------------------------------------------------------------------
+#[NEW 20230628]
+dat_files_count=$(cat /dev/shm/${ts}_dat_files.txt|wc -l)
+sum_files_count=$(cat /dev/shm/${ts}_sum_files.txt|wc -l)
+
+
 
 #Check that sample names are present in equivalency table (NEW: 26/11/2018)
 #------------------------------------------------------------------------------------------------------------
@@ -1473,25 +1522,54 @@ do
 	#If column is operators (NEW: 28/11/2018)
 	if [ "${parameters_to_keep[$parameter]}" == "Operator" ]
 	then
-		#Extract all distinct names from .dat files
-		cut -f2 -d $'\t' /dev/shm/${ts}_dat_parameters_2_cols.txt|tail -n+2|tr '[:upper:]' '[:lower:]'|sort -u > /dev/shm/${ts}_distinct_operators.txt
-		#csimard
-		#jflegare
-		#vseigner
+		#[NEW 20230628] Extract all distinct operators name, count their occurrences, and list them by most to least frequent.
+		#Could be used in a new function to replace missing operators by the most frequent operator.
+		cut -f2 -d $'\t' /dev/shm/${ts}_dat_parameters_2_cols.txt|tail -n+2|tr '[:upper:]' '[:lower:]'|sort|uniq -c|perl -pe 's/^ +(\d+) (\S+|$)/\2\t\1/g'|sort -k2,2 -nr -t $'\t' > /dev/shm/${ts}_operators_most2least_freq.txt
+		
+		#Get all distinct operators from the previous list.
+		cut -f1 -d $'\t' /dev/shm/${ts}_operators_most2least_freq.txt |sort> /dev/shm/${ts}_distinct_operators.txt
+		#	<=== empty string (happens when no operators were specified)		
+		#ini
+		#jfl
+		#mno
+		#sl
+	
+		
+		#echo
+		#cat /dev/shm/${ts}_operators_most2least_freq.txt
+		
+		
+		#exit
+		#echo
+		#head /dev/shm/${ts}_dat_parameters_2_cols.txt
+		#echo "(...)"
+		
 		
 		#If there are empty names in .dat files
 		if [ $(perl -pe 's/ //g' /dev/shm/${ts}_distinct_operators.txt|grep '^$'|wc -l) -gt 0 ]
 		then
 			awk -F "\t" '{if ($2 == "" || $2 ~ /^ +$/) print $1}' /dev/shm/${ts}_dat_parameters_2_cols.txt > /dev/shm/${ts}_files_wo_operators.txt
 			
-			printf "${red_color}\nWARNING: there are empty operator names in .dat files!\n"
-			perl -pe 's/^/\t/g' /dev/shm/${ts}_files_wo_operators.txt
+			#[NEW 20230628]
+			files_wo_op_count=$(cat /dev/shm/${ts}_files_wo_operators.txt|wc -l)
+			if [ $files_wo_op_count -eq $dat_files_count ]
+			then
+				printf "${red_color}\nWARNING: none of the .dat files have the operator specified!\n"
+				printf "Operators are REQUIRED.\n"
+			
+			else
+				printf "${red_color}\nWARNING: there are empty operator names in .dat files!\n"
+				perl -pe 's/^/\t/g' /dev/shm/${ts}_files_wo_operators.txt
+			fi
+			
+			printf "Please add missing operators in .dat files!\n"
 			printf "\t***ABORTED***${normal_color}\n"
 			exit	
+		
 		#NOTE: in the future, could replace all empty values with a reference name.
 		
 		fi
-		
+		#exit
 		
 		#Check if operators extracted from .dat files are in refeference list (created at the beginning under the VARIABLES section)
 		#Search for exclusive names from .dat files vs ref list
@@ -1893,6 +1971,8 @@ do
 			#echo "Median value from function: $median_value"
 			#echo "median value int from function: $median_value_int"
 		
+			
+		
 			#Ex:
 			#Read number (often column #1): 
 			#	0
@@ -1925,8 +2005,12 @@ do
 			#Check the type of data for current column
 			
 			#Position. Possible formats: 0.000, 00.000
-			#If the two formats are present, consider the current column as being the position
-			if [ $(grep -E '^0{1,2}\.0{3}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt|wc -l) -eq 2 ]
+			#[2023-07-05]: set to accept any one of those formats instead of having both.
+			#	In the E188A dataset from 2021 (U:\Centre_Fibre\000_TreeSource\Projet52\Patrick Lenz\2023_E188A_densito)
+			#	...the files B7R12C11.dat and B7R6C17.dat have position values all above 10.000, hence the only format present is 00.000.
+			#If ONE of the two formats is present, consider the current column as being the position			
+			if [ $(grep -E '^0{1,2}\.0{3}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt|wc -l) -gt 0 ]
+			#Line before 2023-07-05: if [ $(grep -E '^0{1,2}\.0{3}$' /dev/shm/${ts}_partly_cleaned_dat_curr_col_zeroed_formats.txt|wc -l) -eq 2 ]
 			then 
 				#echo "pos"
 				col_pos_b2p=${column}
@@ -1986,7 +2070,6 @@ do
 	#echo col_dens ${col_dens}
 	#echo col_ringno_p2b ${col_ringno_p2b}
 	#echo col_wood ${col_wood}
-	
 	#exit
 	
 	
@@ -4087,7 +4170,7 @@ printf "${green_color}FILES FOR IMPORT:\n---------------------------------------
 #Corrected reads
 #-----------------------------------------------------------------------------------------
 printf "\tCorrected reads (all_samples_ready4import.txt):\n"
-printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -c \"\copy x_ray_dens_msmts_per_read FROM 'all_samples_ready4import.txt'\"\n${normal_color}"
+printf "\t\tpsql -U cleseb -h 132.156.208.78 -d ts_d -c \"\copy x_ray_dens_msmts_per_read FROM 'all_samples_ready4import.txt'\"\n${normal_color}"
 
 
 #Invalid rings
@@ -4134,7 +4217,7 @@ then
 	echo
 	printf "${green_color}\tInvalid rings:\n"
 	printf "\t\tALTER TABLE invalid_rings DISABLE TRIGGER trg_invalid_rings_01;\n"
-	printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -c \"\copy invalid_rings FROM 'invalid_rings.txt'\"\n"
+	printf "\t\tpsql -U cleseb -h 132.156.208.78 -d ts_d -c \"\copy invalid_rings FROM 'invalid_rings.txt'\"\n"
 	printf "\t\tALTER TABLE invalid_rings ENABLE TRIGGER trg_invalid_rings_01;\n${normal_color}"
 	#exit
 
@@ -4148,7 +4231,7 @@ then
 	echo
 	printf "${green_color}\tIncomplete rings:\n"
 	printf "\t\tALTER TABLE incomplete_ringss DISABLE TRIGGER trg_incomplete_rings_01;\n"
-	printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -c \"\copy incomplete_rings FROM 'incomplete_rings.txt'\"\n"
+	printf "\t\tpsql -U cleseb -h 132.156.208.78 -d ts_d -c \"\copy incomplete_rings FROM 'incomplete_rings.txt'\"\n"
 	printf "\t\tALTER TABLE incomplete_ringss ENABLE TRIGGER trg_incomplete_rings_01;\n${normal_color}"
 fi
 
@@ -4163,7 +4246,7 @@ if [ -s ${temp_f}/for_import/SQL_UPDATE_invalid_samples.txt ]
 then
 	echo
 	printf "${green_color}\tInvalid samples:\n"
-	printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -f \"SQL_UPDATE_invalid_samples.txt\"\n${normal_color}"
+	printf "\t\tpsql -U cleseb -h 132.156.208.78 -d ts_d -f \"SQL_UPDATE_invalid_samples.txt\"\n${normal_color}"
 fi
 
 
@@ -4235,7 +4318,7 @@ then
 
 	echo
 	printf "${green_color}\tComments and description on samples from .dat files:\n"
-	printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -c \"\copy comments_on_germplasms (germplasm_id, date, date_is_approximate, comment, context_id, data_source_id, action_required, team_id) FROM 'comments_on_germplasms.txt'\"\n"
+	printf "\t\tpsql -U cleseb -h 132.156.208.78 -d ts_d -c \"\copy comments_on_germplasms (germplasm_id, date, date_is_approximate, comment, context_id, data_source_id, action_required, team_id) FROM 'comments_on_germplasms.txt'\"\n"
 	echo
 
 fi
@@ -4252,7 +4335,7 @@ then
 	printf "${green_color}\tSamples where last ring year differs than that expected from harvest date:\n"
 	
 	printf "\t\tALTER TABLE last_ring_year_in_densitometry_data DISABLE TRIGGER trg_last_ring_year_in_densitometry_data_01;\n"
-	printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -c \"\copy last_ring_year_in_densitometry_data FROM 'last_ring_year_in_densitometry_data.txt'\"\n"
+	printf "\t\tpsql -U cleseb -h 132.156.208.78 -d ts_d -c \"\copy last_ring_year_in_densitometry_data FROM 'last_ring_year_in_densitometry_data.txt'\"\n"
 	printf "\t\tALTER TABLE last_ring_year_in_densitometry_data ENABLE TRIGGER trg_last_ring_year_in_densitometry_data_01;\n${normal_color}"
 	echo
 fi
@@ -4279,14 +4362,16 @@ printf "\t'x_ray_dens_msmts_per_read',\n" >> ${temp_f}/for_import/SQL_INSERT_INT
 printf "\t'$(if [ $ewlw_transition_method -eq 1 ];then printf "Mid-range density"; else printf "Median density";fi)',\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf "\t'${0} (${version})',\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf "\t'first_ring_is_pith=${first_ring_is_pith}, ewlw_transition_method=${ewlw_transition_method}, multiple_transitions_option=${multiple_transitions_option}, low_density_reads_removal_choice=${low_density_reads_removal_choice}, step=${step}, min_reads_per_ring_dat=${min_reads_per_ring_dat}, min_reads_for_transition=${min_reads_for_transition}, min_ew_proportion=${min_ew_proportion}, max_ring_width_factor=${max_ring_width_factor}, max_pct_invalid_rings_for_invalid_sample=${max_pct_invalid_rings_for_invalid_sample}, min_allowed_density=${min_allowed_density}, max_allowed_density=${max_allowed_density}, extreme_densities_max_pct_allowed=${extreme_densities_max_pct_allowed}, reads_to_check_for_density_pithside=${reads_to_check_for_density_pithside}, reads_to_check_for_density_barkside=${reads_to_check_for_density_barkside}, lowest_density_threshold=${lowest_density_threshold}, highest_density_threshold=${highest_density_threshold}, varying_threshold_step=${varying_threshold_step}.',\n"  >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
-printf "\t'999'\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
+printf "\t${ring_dating_method}\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf ")\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 printf ";\n" >> ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 
-iconv -f iso-8859-1 -t utf-8 ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt > ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments_utf.txt
-rm ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
+#[2023-07-07]: pour une raison que j'ignore, ce n'est plus la version utf-8 qui fonctionne, mais celle de base, iso-8859-1
+#iconv -f iso-8859-1 -t utf-8 ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt > ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments_utf.txt
+#rm ${temp_f}/for_import/SQL_INSERT_INTO_phys_msmt_experiments.txt
 
 #UPDATE
+#Mêmes infos que pour l'INSERT, juste au cas où l'enr. pour ce data_source_id serait déjà présent.
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 printf "UPDATE phys_msmt_experiments\nSET\n" > ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 printf "\tsamples_analyzed=${number_of_dat_sum_files},\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt	#Computed above
@@ -4301,21 +4386,17 @@ printf "\ttable_where_data_put='x_ray_dens_msmts_per_read',\n" >> ${temp_f}/for_
 printf "\tew_lw_treshold_method='$(if [ $ewlw_transition_method -eq 1 ];then printf "Mid-range density"; else printf "Median density";fi)',\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 printf "\tscript_version='${0} (${version})',\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 printf "\tscript_parameters='first_ring_is_pith=${first_ring_is_pith}, ewlw_transition_method=${ewlw_transition_method}, multiple_transitions_option=${multiple_transitions_option}, low_density_reads_removal_choice=${low_density_reads_removal_choice}, step=${step}, min_reads_per_ring_dat=${min_reads_per_ring_dat}, min_reads_for_transition=${min_reads_for_transition}, min_ew_proportion=${min_ew_proportion}, max_ring_width_factor=${max_ring_width_factor}, max_pct_invalid_rings_for_invalid_sample=${max_pct_invalid_rings_for_invalid_sample}, min_allowed_density=${min_allowed_density}, max_allowed_density=${max_allowed_density}, extreme_densities_max_pct_allowed=${extreme_densities_max_pct_allowed}, reads_to_check_for_density_pithside=${reads_to_check_for_density_pithside}, reads_to_check_for_density_barkside=${reads_to_check_for_density_barkside}, lowest_density_threshold=${lowest_density_threshold}, highest_density_threshold=${highest_density_threshold}, varying_threshold_step=${varying_threshold_step}.',\n"  >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
-printf "\tring_dating_method_id=999'\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
+printf "\tring_dating_method_id=${ring_dating_method}'\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 printf "WHERE data_source_id=${data_source_id}\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt #data_source_id from the $eq_list file
 printf ";\n" >> ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 
-iconv -f iso-8859-1 -t utf-8 ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt > ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments_utf.txt
-rm ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
+#iconv -f iso-8859-1 -t utf-8 ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt > ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments_utf.txt
+#rm ${temp_f}/for_import/SQL_UPDATE_phys_msmt_experiments.txt
 
 
 printf "${green_color}\tDetails on the dataset:\n"
-printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -f \"SQL_INSERT_INTO_phys_msmt_experiments_utf.txt\"\n"
-printf "\t\tpsql -U cleseb -h 132.156.208.30 -d ts_d -f \"SQL_UPDATE_phys_msmt_experiments_utf.txt\"\n"
-printf "\tNote: replace the ring_dating_method_id value (set by default to 999) with the appropriate one.\n${normal_color}"
-
-
-
+printf "\t\tpsql -U cleseb -h 132.156.208.78 -d ts_d -f \"SQL_INSERT_INTO_phys_msmt_experiments.txt\"\n"
+printf "\t\tpsql -U cleseb -h 132.156.208.78 -d ts_d -f \"SQL_UPDATE_phys_msmt_experiments.txt${normal_color}\"\n"
 
 
 echo "-------------------"
