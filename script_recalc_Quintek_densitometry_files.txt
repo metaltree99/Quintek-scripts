@@ -2,7 +2,7 @@
 #Sébastien Clément
 #Created 5/2/2016
 
-version="20230707"
+version="20231106"
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #General description
@@ -765,8 +765,9 @@ version="20230707"
 #		Ring dating method is not specified in a variable, to prepare the SQL_INSERT_INTO_phys_msmt_experiments_utf.txt file
 #			(field phys_msmt_experiments.ring_dating_method_id)
 #		SQL_INSERT_INTO_phys_msmt_experiments_utf.txt file is no longer produced, as it seems the iso-8859-1 file, SQL_INSERT_INTO_phys_msmt_experiments.txt, is the one that works with accents...
-#
-#
+
+#	20231106
+#		In computing of /dev/shm/${ts}_combined_invalid_rings.txt, an error putting the "NULL" instead of the "\N" value was corrected around line 4197.
 
 #
 #================================================================================================================================================
@@ -830,7 +831,8 @@ fi
 
 #Associative array for operator abbreviations in .dat files
 #----------------------------------------------------------------
-#Updated: 3/6/2019
+#Updated: 2023-11-02
+#******************MP ---> à trouver, on a mis Christine en attendant.
 declare -A operators_abbrev_fullname
 operators_abbrev_fullname=(
 [jeffl]="Jean-François Légaré" 
@@ -846,7 +848,7 @@ operators_abbrev_fullname=(
 [csimard]="Christine Simard"
 [mno]="Maxim Nolan"
 [sl]="Samuel Lapierre"
-
+[mp]="Christine Simard"
 )
 
 
@@ -864,6 +866,7 @@ do
 	#Put that into a file
 	printf "${op_abbrev}\t${op_fullname}\t${op_team_id}\n" >> /dev/shm/${ts}_operators_ref_list.txt
 done
+
 
 #erm	Edouard Reed-Métayer	124
 #vseigner	Vincent Seigner	118
@@ -4191,7 +4194,9 @@ printf "\t\tpsql -U cleseb -h 132.156.208.78 -d ts_d -c \"\copy x_ray_dens_msmts
 #14      19      Invalid ring. Percent extreme density reads ( 100%) is above the accepted limit (50%). Average density for extreme reads: 10.9771 kg/m3. Auto-flagged by recalc_Quintek_densitometry_files_20190715.txt on 2019-07-15.  7       FALSE   \N
 #14      2       Ring auto. flagged as the pith (invalid ring) on 2019-07-15 by recalc_Quintek_densitometry_files_20190715.txt, because piths are assumed to be systematically left in the results (parameter first_ring_is_pith=1).     8       TRUE    \N
 #15      2       Ring auto. flagged as the pith (invalid ring) on 2019-07-15 by recalc_Quintek_densitometry_files_20190715.txt, because piths are assumed to be systematically left in the results (parameter first_ring_is_pith=1).     8       TRUE    \N
-cat <(awk -F "\t" '{print $1"_"$2"_A\t"$0"\t8\tTRUE\t\\N"}' /dev/shm/${ts}_pith_rings.txt) <(awk -F "\t" '{print $1"_"$2"_B\t"$0"\t7\tFALSE\tNULL"}' /dev/shm/${ts}_invalid_rings_due_to_extreme_densities.txt)|sort -k1,1|cut -f1 --complement|sort -t $'\t' -k1,1 -k2,2 -u > /dev/shm/${ts}_combined_invalid_rings.txt
+#Line before 2023-11-06: "NULL" was wrongly used instead of "\N": cat <(awk -F "\t" '{print $1"_"$2"_A\t"$0"\t8\tTRUE\t\\N"}' /dev/shm/${ts}_pith_rings.txt) <(awk -F "\t" '{print $1"_"$2"_B\t"$0"\t7\tFALSE\tNULL"}' /dev/shm/${ts}_invalid_rings_due_to_extreme_densities.txt)|sort -k1,1|cut -f1 --complement|sort -t $'\t' -k1,1 -k2,2 -u > /dev/shm/${ts}_combined_invalid_rings.txt
+cat <(awk -F "\t" '{print $1"_"$2"_A\t"$0"\t8\tTRUE\t\\N"}' /dev/shm/${ts}_pith_rings.txt) <(awk -F "\t" '{print $1"_"$2"_B\t"$0"\t7\tFALSE\t\N"}' /dev/shm/${ts}_invalid_rings_due_to_extreme_densities.txt)|sort -k1,1|cut -f1 --complement|sort -t $'\t' -k1,1 -k2,2 -u > /dev/shm/${ts}_combined_invalid_rings.txt
+
 
 #Step 3: add any other invalid ring [Added 2023-03-09]
 cat /dev/shm/${ts}_other_invalid_rings.txt >> /dev/shm/${ts}_combined_invalid_rings.txt
