@@ -2,7 +2,7 @@
 #Sébastien Clément
 #Created 5/2/2016
 
-version="20231106"
+version="20231208"
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #General description
@@ -299,6 +299,7 @@ version="20231106"
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #TODO:
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
+	#0. Create a separate file for operators instead of a hash within this script
 	#1. Get team_id from ts_pi and use it to add to comments_on_germplasms_utf.txt [2019-07-17]
 	#2. Use find in density_infiles, to have all files in sub-folders as well.
 	
@@ -769,6 +770,10 @@ version="20231106"
 #	20231106
 #		In computing of /dev/shm/${ts}_combined_invalid_rings.txt, an error putting the "NULL" instead of the "\N" value was corrected around line 4197.
 
+#	20231208
+#		Added operators
+
+
 #
 #================================================================================================================================================
 #VARIABLES
@@ -831,7 +836,7 @@ fi
 
 #Associative array for operator abbreviations in .dat files
 #----------------------------------------------------------------
-#Updated: 2023-11-02
+#Updated: 2023-12-08
 #******************MP ---> à trouver, on a mis Christine en attendant.
 declare -A operators_abbrev_fullname
 operators_abbrev_fullname=(
@@ -849,6 +854,10 @@ operators_abbrev_fullname=(
 [mno]="Maxim Nolan"
 [sl]="Samuel Lapierre"
 [mp]="Christine Simard"
+[er_jfl]="Étienne Robert, Jean-François Légaré"
+[gbc]="Guillaume Bolduc-Couture"
+[jfl_gbc]="Jean-François Légaré, Guillaume Bolduc-Couture"
+
 )
 
 
