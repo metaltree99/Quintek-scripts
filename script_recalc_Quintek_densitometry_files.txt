@@ -2,7 +2,19 @@
 #Sébastien Clément
 #Created 5/2/2016
 
-version="20231208"
+version="20231211"
+
+#-----------------------------------------------------------------------------------------------------------------------------------------------------------
+#TODO:
+#-----------------------------------------------------------------------------------------------------------------------------------------------------------
+	#1. [2023-12-11]: When there's a W15 error (all reads removed because too low density) on a ring, it shouldn't trigger a E12 (whole sample to be redone), but instead leave that particular ring out.
+	#2. Create a separate file for operators instead of a hash within this script
+	#3. Get team_id from ts_pi and use it to add to comments_on_germplasms_utf.txt [2019-07-17]
+	#4. Use find in density_infiles, to have all files in sub-folders as well.
+	
+
+
+
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #General description
@@ -296,13 +308,6 @@ version="20231208"
 
 
 
-#-----------------------------------------------------------------------------------------------------------------------------------------------------------
-#TODO:
-#-----------------------------------------------------------------------------------------------------------------------------------------------------------
-	#0. Create a separate file for operators instead of a hash within this script
-	#1. Get team_id from ts_pi and use it to add to comments_on_germplasms_utf.txt [2019-07-17]
-	#2. Use find in density_infiles, to have all files in sub-folders as well.
-	
 
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
