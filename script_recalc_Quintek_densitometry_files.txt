@@ -7,10 +7,9 @@ version="20231211"
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
 #TODO:
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------
-	#1. [2023-12-11]: When there's a W15 error (all reads removed because too low density) on a ring, it shouldn't trigger a E12 (whole sample to be redone), but instead leave that particular ring out.
-	#2. Create a separate file for operators instead of a hash within this script
-	#3. Get team_id from ts_pi and use it to add to comments_on_germplasms_utf.txt [2019-07-17]
-	#4. Use find in density_infiles, to have all files in sub-folders as well.
+	#1. Create a separate file for operators instead of a hash within this script
+	#2. Get team_id from ts_pi and use it to add to comments_on_germplasms_utf.txt [2019-07-17]
+	#3. Use find in density_infiles, to have all files in sub-folders as well.
 	
 
 
@@ -777,6 +776,11 @@ version="20231211"
 
 #	20231208
 #		Added operators
+#
+#	20231211
+#		When there are no readings left for any ring due to removal of low density reads (<min_allowed_density)
+#		...the script no longer shows a E12 error.
+#		E12 error is now restricted only to when there were already no reads in the .dat for a given ring in the .sum file.
 
 
 #
@@ -3119,7 +3123,9 @@ do
 					#printf "This will become an E12 error for the current sample.\n"
 					
 					#Add ring to /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt					
-					printf "${sample_name}\t${ring_no}\tW15\tRing has no reads left after removal of low-density reads. This will lead to an E12 error.\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+					#Line before 2023-12-11: printf "${sample_name}\t${ring_no}\tW15\tRing has no reads left after removal of low-density reads. This will lead to an E12 error.\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+					#[NEW 2023-12-11]: will no longer trigger an E12 error if because of low density reads removal yields 0 reads.
+					printf "${sample_name}\t${ring_no}\tW15\tRing has no reads left after removal of low-density reads.\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
 				
 				fi
 				
@@ -3667,17 +3673,31 @@ do
 				
 				
 				else # Just no corresponding reads found in the .dat file
-				
-					ring_error_message="No reads found between end (${ring_end_pos}) and start (${ring_start_pos}) positions in .dat file corresponding to .sum file ring number ${ring_no}. THE WHOLE .sum FILE SHOULD BE REDONE."
-					ring_error_code="E12"
-					#Add ring error code and message to the file
-					printf "${sample_name}\t${ring_no}\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
-				
-					#[20190626]: The next 4 lines had been forgotten.
-					#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next sample
-					#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
-					fnct_write_warning_and_errors_to_stats_files
-					continue
+					#[NEW 2023-12-11]: If there were rejected reads based on min_allowed_density, do not give an error, this was already flaggged by W15 (line ~ 3110)
+					
+					if [ ${rejected_reads_counts} -gt 0 ]
+					then
+						#Nothing happens.
+						#test line
+						#echo "Y'a pas de lectures dans le .dat correspondant à ce cerne car elles ont toutes été enlevées par cause de faible densité (rejected_reads_count=${rejected_reads_count})."
+						echo
+					
+					#The absence of reads is NOT due to low-density reads removal, call an ERROR.
+					#NOTE: Here, since it is within the for loop by ring, ONLY THE RING will be skipped by the "continue" command, NOT the samle.
+					else
+						ring_error_message="No reads found between end (${ring_end_pos}) and start (${ring_start_pos}) positions in .dat file corresponding to .sum file ring number ${ring_no}. THE WHOLE .sum FILE SHOULD BE REDONE."
+						ring_error_code="E12"
+						#Add ring error code and message to the file
+						printf "${sample_name}\t${ring_no}\t${ring_error_code}\t${ring_error_message}\n" >> /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt
+					
+						#[20190626]: The next 4 lines had been forgotten.
+						#With the command "continue" below, the rest of the "for" loop is skipped to go directly to the next RING (NOT sample, the sample itself is NOT discarded).
+						#Thus, we must write the /dev/shm/${ts}_current_sample_ring_errors_and_warnings.txt file to the rings_errors_and_warnings.txt and samples_errors_and_warnings.txt files
+						fnct_write_warning_and_errors_to_stats_files
+						continue
+						
+					fi
+					
 				fi
 		fi
 
@@ -4024,14 +4044,14 @@ fi
 
 
 #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#[2017-06-29], updated 6/12/218: add ring error codes descriptions to a separate file: error_and_warning_codes.txt
+#[2017-06-29], updated 2023-12-11
 #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 printf "\n\nError codes descriptions:\n-------------------------\n" > ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "***NOTE***: If these errors occur, .sum and/or .dat files SHOULD BE REDONE for the sample before running the script again.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "E1\t.dat file is empty/without proper header.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "E2\t.dat file has duplicated positions.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "E3\t.dat file has disordered positions.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
-printf "E4\t.dat file has missing rings.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
+#printf "E4\t.dat file has missing rings.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "E5\t.dat file has large gaps (>= 10x step) between some reads.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "E6\t.sum file is empty/without proper header.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
 printf "E7\t.sum has disordered ring numbers.\n" >> ${temp_f}/logs_and_summaries/intermediate/error_and_warning_codes.txt
@@ -4465,7 +4485,7 @@ rm /dev/shm/${ts}_*.txt
 exit
 
 
-
+#Below is simply an explaination of all error/warning reporting files
 ==============================================================================================================================
 <<"Errors and warnings reporting"
 ==============================================================================================================================
