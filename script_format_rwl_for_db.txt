@@ -11,7 +11,7 @@ test=0 #1 = yes; 0 = no
 #----------------------------------------------------------------
 #script_format_rwl_for_db.txt infile.rwl
 #	infile.rwl: the original .rwl file
-# A folder named rwl_outfiles_202xxxxxxxxxxx will be created in the current folder and will contain all the temporary as well as the final file
+# A folder named rwl_outfiles_202xxxxxxxxxxx will be created in the current folder and will contain all the temporary as well as the final files.
 # The final file is named: rwl_final_202xxxxxxxxxxx.txt
 
 #----------------------------------------------------------------
